@@ -33,6 +33,7 @@ from broker import DONE, AlpacaBroker, SimBroker
 NY = s.NEW_YORK
 BUFFER = 0.02             # trade an ETF when its weight drifts more than this from target
 CASH_BUFFER = 0.005       # share of equity kept as cash, outside BOXX
+LIMIT_BAND = 0.01          # orders refuse prices more than 1% worse than the latest trade
 MIN_ORDER = 1.00          # smallest order in dollars
 MIN_BOXX_ORDER = 50.00    # smallest move into or out of BOXX
 MAX_ORDER = 0.30          # largest single ETF order, as a share of equity (BOXX exempt: it is cash)
@@ -149,7 +150,10 @@ class LogBook:
         if not rows:
             return
         p = self.folder / name
-        pd.DataFrame(rows).to_csv(p, mode="a", header=not p.exists(), index=False)
+        new = pd.DataFrame(rows)
+        if p.exists():
+            new = pd.concat([pd.read_csv(p, dtype=str), new.astype(object)], ignore_index=True)
+        new.to_csv(p, index=False)
 
     def write_day(self, row):
         row = {k: (round(v, 6) if isinstance(v, float) else v) for k, v in row.items()}
@@ -276,14 +280,44 @@ def wait_for(broker, orders, timeout):
     return list(done.values())
 
 
-def send(broker, symbol, side, week, qty=None, notional=None, fractionable=True, price=None):
-    if not fractionable:
-        if qty is None:
-            qty = math.floor(notional / price)
-        qty, notional = math.floor(qty + 1e-9), None
-        if qty < 1:
+def limit_for(side, price):
+    """The worst price an order accepts: 1% above the latest trade for a buy,
+    1% below it for a sell, in whole cents (Alpaca refuses fractions of a cent)."""
+    if side == "buy":
+        return math.floor(price * (1 + LIMIT_BAND) * 100 + 1e-6) / 100
+    return math.ceil(price * (1 - LIMIT_BAND) * 100 - 1e-6) / 100
+
+
+def send(broker, symbol, side, week, qty=None, notional=None, fractionable=True, ref_price=None):
+    """One limit order, 1% from the latest trade. A buy given in dollars is sized
+    at its limit price, so it can't cost more than `notional`. If Alpaca refuses
+    the limit order (HTTP 422), the same shares go as a market order, marked
+    fallback_market. Returns the order, or None when there is nothing to send."""
+    cid = f"tb-{week}-{symbol}-{side}"
+    try:
+        price = broker.latest_price(symbol)
+    except Exception:  # noqa: BLE001
+        price = ref_price
+    if not price or price <= 0:
+        if qty is None and not fractionable:
             return None
-    return broker.submit(symbol, side, f"tb-{week}-{symbol}-{side}", qty=qty, notional=notional)
+        o = broker.submit(symbol, side, cid + "-m", qty=qty, notional=None if qty is not None else floor_to(notional, 2))
+        o["fallback_market"] = True
+        return o
+    limit = limit_for(side, price)
+    if qty is None:
+        qty = notional / limit
+    qty = floor_to(qty, 9) if fractionable else math.floor(qty + 1e-9)
+    if qty <= 0 or (notional is not None and qty * price < MIN_ORDER):
+        return None
+    try:
+        return broker.submit(symbol, side, cid, qty=qty, limit_price=limit)
+    except RuntimeError as e:
+        if "(422)" not in str(e):
+            raise
+        o = broker.submit(symbol, side, cid + "-m", qty=qty)
+        o["fallback_market"] = True
+        return o
 
 
 def execute(broker, dollars, targets, positions, equity, week, timeout):
@@ -304,7 +338,8 @@ def execute(broker, dollars, targets, positions, equity, week, timeout):
         qty = held["qty"] if targets[t] <= 0 else min(held["qty"], -d / held["price"])
         qty = floor_to(qty, 9) if info[sym]["fractionable"] else math.floor(qty + 1e-9)
         if qty > 0:
-            o = send(broker, sym, "sell", week, qty=qty, fractionable=info[sym]["fractionable"])
+            o = send(broker, sym, "sell", week, qty=qty, fractionable=info[sym]["fractionable"],
+                     ref_price=held["price"])
             if o:
                 sells.append(o)
                 est_cash += qty * held["price"]
@@ -313,9 +348,11 @@ def execute(broker, dollars, targets, positions, equity, week, timeout):
     boxx = positions.get(s.CASH_ETF)
     if need > MIN_BOXX_ORDER and boxx:
         qty = floor_to(min(boxx["qty"], need / boxx["price"] * 1.001), 9)
-        o = send(broker, s.CASH_ETF, "sell", week, qty=qty, fractionable=info[s.CASH_ETF]["fractionable"])
+        o = send(broker, s.CASH_ETF, "sell", week, qty=qty, fractionable=info[s.CASH_ETF]["fractionable"],
+                 ref_price=boxx["price"])
         if o:
             sells.append(o)
+    sent_all = list(sells)
     finished += wait_for(broker, sells, timeout)
 
     # 2. buys, scaled down if the cash isn't there
@@ -330,24 +367,27 @@ def execute(broker, dollars, targets, positions, equity, week, timeout):
         sym = FUND[t]
         notional = floor_to(d * scale, 2)
         if notional >= MIN_ORDER:
-            price = None if info[sym]["fractionable"] else broker.latest_price(sym)
-            o = send(broker, sym, "buy", week, notional=notional, fractionable=info[sym]["fractionable"], price=price)
+            o = send(broker, sym, "buy", week, notional=notional, fractionable=info[sym]["fractionable"])
             if o:
                 buys.append(o)
+    sent_all += buys
     finished += wait_for(broker, buys, timeout)
 
     # 3. idle cash into BOXX
     extra = floor_to(broker.account()["cash"] - CASH_BUFFER * equity, 2)
     if extra >= MIN_BOXX_ORDER:
-        frac = info[s.CASH_ETF]["fractionable"]
-        price = None if frac else broker.latest_price(s.CASH_ETF)
-        o = send(broker, s.CASH_ETF, "buy", week, notional=extra, fractionable=frac, price=price)
+        o = send(broker, s.CASH_ETF, "buy", week, notional=extra, fractionable=info[s.CASH_ETF]["fractionable"])
         if o:
+            sent_all.append(o)
             finished += wait_for(broker, [o], timeout)
 
     partial = [o["symbol"] for o in finished if o["status"] != "filled"]
     if partial:
-        notes.append("not fully filled: " + ", ".join(sorted(set(partial))))
+        notes.append("not fully filled (price limit or partial fill): " + ", ".join(sorted(set(partial))))
+    fallback = [o["symbol"] for o in sent_all if o.get("fallback_market")]
+    if fallback:
+        notes.append("sent at market because the limit order was refused or no price was available: "
+                     + ", ".join(sorted(set(fallback))))
     return finished, notes
 
 
@@ -449,7 +489,8 @@ def run(broker, trading_enabled, log_dir="log", now=None, data=None, dividend_fn
                  "planned_dollars": round(dollars.get(SIGNAL.get(o["symbol"], ""), 0.0), 2),
                  "status": o["status"], "filled_qty": float(o.get("filled_qty") or 0),
                  "filled_avg_price": float(o.get("filled_avg_price") or 0),
-                 "open_price_today": opens.get(o["symbol"], ""), "dry_run": False} for o in traded])
+                 "open_price_today": opens.get(o["symbol"], ""), "dry_run": False,
+                 "order_type": o.get("type", ""), "limit_price": o.get("limit_price") or ""} for o in traded])
             status = (f"error: {problems[-1]}" if problems else f"traded: {len(traded)} orders")
 
     # after trading, re-read the account
@@ -531,6 +572,47 @@ def simulate(log_dir="sim_log"):
     return row, broker
 
 
+CHECK_SYMBOL = "VOO"
+
+
+def check_orders(broker, log_dir="log", now=None, pause=2.0):
+    """One-time check that the paper account accepts the bot's order type.
+    Places two tiny VOO buy orders priced 50% below the market, so they cannot
+    fill, reads them back and cancels them. Also records each fund's latest
+    IEX trade and how old it is, since limit prices are set from it.
+    Writes log/order_check.json and returns the results."""
+    now = pd.Timestamp(now or pd.Timestamp.now(tz=NY)).tz_convert(NY)
+    out = {"run_at": now.isoformat(), "market_open": bool(broker.clock()["is_open"]), "prices": {}, "tests": []}
+    for sym in sorted(set(FUND.values()) | {s.CASH_ETF}):
+        try:
+            price, when = broker.latest_trade(sym)
+            out["prices"][sym] = {"price": price, "trade_time": str(when),
+                                  "age_minutes": round((now - pd.Timestamp(when)).total_seconds() / 60, 1)}
+        except Exception as e:  # noqa: BLE001
+            out["prices"][sym] = {"error": str(e)[:200]}
+    far = round(broker.latest_price(CHECK_SYMBOL) * 0.5, 2)
+    stamp = now.strftime("%Y%m%d%H%M%S")
+    cases = [("fractional shares with a limit price (what the bot sends)", {"qty": 0.01}),
+             ("dollar amount with a limit price (not used by the bot)", {"notional": 5.0})]
+    for i, (name, size) in enumerate(cases, start=1):
+        entry = {"test": name, "symbol": CHECK_SYMBOL, "limit_price": far, **size}
+        try:
+            o = broker.submit(CHECK_SYMBOL, "buy", f"check-{stamp}-{i}", limit_price=far, **size)
+            entry.update(accepted=True, status=o.get("status"))
+            time.sleep(pause)
+            broker.cancel(o["id"])
+            time.sleep(pause)
+            after = broker.order(o["id"])
+            entry.update(status_after_cancel=after.get("status"), filled_qty=float(after.get("filled_qty") or 0))
+        except Exception as e:  # noqa: BLE001
+            entry.update(accepted=False, error=str(e)[:300])
+        out["tests"].append(entry)
+    folder = Path(log_dir)
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "order_check.json").write_text(json.dumps(out, indent=2, default=str))
+    return out
+
+
 def record_crash(error, trading_enabled, log_dir="log", now=None):
     """Write a run that crashed into the log, so the failure shows in the repository.
     A row already written today (say, by an earlier run that traded) is kept."""
@@ -547,7 +629,15 @@ def record_crash(error, trading_enabled, log_dir="log", now=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--simulate", action="store_true")
+    parser.add_argument("--check-orders", action="store_true",
+                        help="place two unfillable VOO limit orders on the paper account, then cancel them")
     args = parser.parse_args()
+    if args.check_orders:
+        broker = AlpacaBroker(os.environ.get("ALPACA_API_KEY_ID"), os.environ.get("ALPACA_API_SECRET_KEY"))
+        result = check_orders(broker)
+        print(json.dumps(result, indent=2, default=str))
+        first = result["tests"][0]
+        return 0 if first.get("accepted") and not first.get("filled_qty") else 1
     if args.simulate:
         row, broker = simulate()
         print(f"Simulated run on {row['date']}: {row['status']}")

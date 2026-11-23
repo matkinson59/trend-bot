@@ -154,17 +154,17 @@ Each week Miles adds a dated note: what the bot did and why, and one prediction 
 | --- | --- |
 | Nov 23 to 29, 2026 | Trading rules and data loader |
 | Nov 30 to Dec 6 | Backtest, benchmarks and validation |
-| Dec 7 to 13 | Live bot in dry-run mode |
-| Dec 14 | Live paper trading starts |
+| Nov 23 to 27 | Live bot in dry-run mode (moved up from Dec 7 to 13 on Nov 23, before any live trading) |
+| Nov 30 | Live paper trading starts (moved up from Dec 14) |
 | Dec 21 to Jan 2, 2027 | Bot runs unattended |
-| Feb 12, 2027 | GitHub's 60-day activity limit, counted from go-live |
+| Jan 29, 2027 | GitHub's 60-day activity limit, counted from go-live |
 | Mar 15, 2027 | Project write-up complete |
 
 ## Open items
 
 1. Alpaca's docs say a paper-only account gets only IEX data ([source](https://docs.alpaca.markets/docs/trading/paper-trading/)), while an Alpaca staff post says free accounts can pull full-market history older than 15 minutes. Signals use Yahoo, so this only affects the fallback.
 2. Each ETF's fractionable flag in Alpaca's asset list. If one isn't fractionable, that order rounds to whole shares.
-3. Whether the bot's own log commits count as repository activity for GitHub's 60-day rule. Backup: a manual commit before Feb 12, 2027.
+3. Whether the bot's own log commits count as repository activity for GitHub's 60-day rule. Backup: a manual commit before Jan 29, 2027.
 4. yfinance is unofficial and has broken when Yahoo changed its site ([source](https://www.pypi.org/project/yfinance/0.2.10b2/)). The Alpaca fallback covers data back to 2016.
 5. Backtest fills at the open estimate fills around 10:17 a.m. The live log measures the gap.
 6. Whether Alpaca paper cash earns interest. Assumed not.
@@ -354,7 +354,7 @@ None of these change the rules or the backtest. Each makes the paper account's r
 2. For five of them, the account holds a cheaper fund that tracks the same assets. Over their shared history, each beat the original by roughly its fee difference.
 3. Idle cash goes into BOXX, a T-bill fund that pays no distributions, so its return shows in its price. Alpaca's paper trading does not credit dividends and says nothing about interest on cash.
 4. The daily log adds dividends back from Yahoo's adjusted prices, since paper trading leaves them out.
-5. Orders stay as version 1 set them: day market orders at 10:17 a.m., sized in dollars with fractional shares, sells first. Opening-auction orders were considered and dropped. Alpaca takes them only in whole shares and only until 9:28 a.m. ET, and a sell that has not filled yet does not free buying power, so buys placed at the same auction could borrow.
+5. Orders go in at 10:17 a.m., sells first, as day limit orders in fractional shares with a price limit 1% from the latest trade (see the live bot table below). Opening-auction orders were considered and dropped. Alpaca takes them only in whole shares and only until 9:28 a.m. ET, and a sell that has not filled yet does not free buying power, so buys placed at the same auction could borrow.
 
 | Signal ETF | Fund held | Expense ratio (signal ETF / fund held) | Index | Return gap per year, shared history | Weekly correlation |
 | --- | --- | --- | --- | --- | --- |
@@ -375,6 +375,7 @@ These details settle how the version 1 order and safety rules run in code. None 
 | Part | How it works |
 | --- | --- |
 | Order of trades | Three steps. (1) Sells, plus enough BOXX to pay for the buys. (2) Buys, scaled down to the cash actually in the account after the sells. (3) Any cash left above the buffer goes into BOXX. Each step waits up to 3 minutes; an order still open then is cancelled and the log flags it. |
+| Price limits | Every order is a limit order 1% from the fund's latest IEX trade: a buy pays at most 1% above it, a sell takes at least 1% below it, in whole cents. On a normal day this fills at once, like a market order; it refuses a glitch price like those of Aug 24, 2015, when some ETFs briefly traded far below their holdings' value. An order still open after 3 minutes is cancelled and flagged, and that position stays off target until the next weekly trade. Buys are sized in shares at their limit price, so a buy can never cost more than planned; on a normal day about 1% of each buy is left over and goes into BOXX. If Alpaca refuses a limit order, the same shares go as a market order and the log flags it. |
 | Cash buffer | 0.5% of equity stays as plain cash, so fills a little above the last price cannot push cash below zero. |
 | Order limits | Orders under $1 are skipped, and BOXX orders under $50. The 30%-of-equity limit applies to the nine ETFs' orders, not to BOXX, which can hold all the cash. |
 | Whole shares | If Alpaca marks a fund as not fractionable, its order rounds down to whole shares. |
@@ -383,7 +384,7 @@ These details settle how the version 1 order and safety rules run in code. None 
 | Data | Yahoo first. If Yahoo fails, adjusted daily bars from Alpaca's market data and the 3-month T-bill rate from FRED (series DTB3). The log records which source was used. |
 | Dry run | With TRADING_ENABLED set to false, the bot logs the orders it would send and marks the week as evaluated, but keeps the old scores, so the first live run trades from scratch. The live record (start date, starting equity, peak, income, costs, 60-day return) begins with the first run that has trading enabled; dry runs before it don't count. |
 | Failure | A run that is blocked by a safety check or hits an error exits with code 1, so GitHub marks it failed and emails Miles. A run that crashes still writes the error to `log/errors.csv`, and to `log/daily.csv` if that day has no row yet. |
-| Files | `log/daily.csv` (one row per day), `log/orders.csv` (every order with its fill), `log/income.csv` (dividends and T-bill interest added back), `log/errors.csv` (runs that crashed), `log/state.json` (last scores, week evaluated, peak equity). |
+| Files | `log/daily.csv` (one row per day), `log/orders.csv` (every order with its fill), `log/income.csv` (dividends and T-bill interest added back), `log/errors.csv` (runs that crashed), `log/order_check.json` (the one-time order check: `python bot.py --check-orders` places two VOO buy orders priced 50% below the market, so they cannot fill, then cancels them), `log/state.json` (last scores, week evaluated, peak equity). |
 
 ### Checked and not used
 

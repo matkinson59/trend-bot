@@ -66,11 +66,14 @@ def test_first_live_run_buys_targets_and_never_borrows(tmp_path):
     assert row["status"].startswith("traded")
     assert broker.cash >= 0
     equity = broker.account()["equity"]
-    assert broker.cash <= bot.CASH_BUFFER * equity + 1.0
+    assert broker.cash <= bot.CASH_BUFFER * equity + bot.MIN_BOXX_ORDER   # smaller leftovers stay as cash
     targets = s.target_weights_v2(data[0], data[1]).iloc[-1]
     for t in s.TICKERS:
-        assert abs(row[f"actual_{t}"] - targets[t]) < 0.001
-    assert abs(row["boxx_weight"] - max(0.0, 1 - targets.sum() - bot.CASH_BUFFER)) < 0.002
+        # buys are sized at their limit price (1% above), so each lands up to 1% of its target short
+        assert targets[t] * (1 - bot.LIMIT_BAND) - 0.006 <= row[f"actual_{t}"] <= targets[t] + 0.001
+    left = max(0.0, 1 - targets.sum() - bot.CASH_BUFFER)
+    assert left - 0.002 <= row["boxx_weight"] <= left + bot.LIMIT_BAND * targets.sum() + 0.002
+    assert all(o["type"] == "limit" for o in broker.sent)
     sides = [o["side"] for o in broker.sent]
     assert "sell" not in sides                      # nothing to sell on day one
 
@@ -185,8 +188,11 @@ def test_boxx_holds_whatever_the_targets_leave(tmp_path):
     row = go(broker, tmp_path, "2026-12-14", data)
     targets = s.target_weights_v2(data[0], data[1]).iloc[-1]
     assert targets.sum() < 0.9
-    assert abs(row["boxx_weight"] - (1 - targets.sum() - bot.CASH_BUFFER)) < 0.002
-    assert abs(row["cash"] - bot.CASH_BUFFER * row["equity_alpaca"]) < 60
+    left = 1 - targets.sum() - bot.CASH_BUFFER
+    assert left - 0.002 <= row["boxx_weight"] <= left + bot.LIMIT_BAND * targets.sum() + 0.002
+    # BOXX is sized at its limit too, so up to 1% of the BOXX buy stays as cash
+    slack = bot.MIN_BOXX_ORDER + bot.LIMIT_BAND * row["boxx_weight"] * row["equity_alpaca"] + 10
+    assert abs(row["cash"] - bot.CASH_BUFFER * row["equity_alpaca"]) < slack
 
 
 def test_next_week_rebalances_end_to_end(tmp_path):
@@ -268,3 +274,81 @@ def test_shadows_are_logged_only_once_live(tmp_path):
     assert "shadow_v2" not in dry
     live = go(broker, tmp_path, "2026-12-14", data, enabled=True)
     assert live["shadow_v1"] == 1.0 and live["shadow_v6"] == 6.0
+
+
+
+def test_every_order_has_a_price_limit_within_one_percent(tmp_path):
+    data = make_data()
+    broker = SimBroker(100_000, FUND_PRICES, trading_days(data, [date(2026, 12, 14)]))
+    go(broker, tmp_path, "2026-12-14", data)
+    assert broker.sent
+    for o in broker.sent:
+        ref = FUND_PRICES[o["symbol"]]
+        assert o["type"] == "limit"
+        if o["side"] == "buy":
+            assert ref <= o["limit_price"] <= ref * 1.01 + 1e-9
+            assert o["qty"] * o["limit_price"] <= 100_000          # sized at the limit price
+        else:
+            assert ref * 0.99 - 1e-9 <= o["limit_price"] <= ref
+    assert bot.limit_for("buy", 635.547) == 641.90 and bot.limit_for("sell", 635.547) == 629.20
+
+
+def test_glitch_price_is_refused_not_filled(tmp_path):
+    data = make_data()
+    days = trading_days(data, [date(2026, 12, 14)])
+    broker = SimBroker(100_000, FUND_PRICES, days, fill_prices={"VOO": 130.0})  # VOO trades 30% too high
+    row = go(broker, tmp_path, "2026-12-14", data)
+    voo = [o for o in broker.sent if o["symbol"] == "VOO"]
+    assert voo                                       # the SPY slot buys on this test day
+    if voo:
+        assert all(o["filled_qty"] == 0 for o in voo)
+        assert "VOO" not in broker.qty or broker.qty["VOO"] == 0
+        assert "not fully filled" in row["flags"]
+    assert broker.cash >= 0
+
+
+def test_glitch_on_a_sell_keeps_the_shares():
+    broker = SimBroker(500, FUND_PRICES, [date(2026, 12, 14)], fill_prices={"VOO": 60.0})
+    broker.qty = {"VOO": 300.0}
+    targets = pd.Series(0.0, index=s.TICKERS)
+    targets["IEF"] = 0.25
+    sent, notes = bot.execute(broker, {"SPY": -30_000.0, "IEF": 25_000.0}, targets,
+                              broker.positions(), broker.account()["equity"], "2026W51", timeout=0)
+    assert broker.qty["VOO"] == 300.0                # not sold at a 40% loss
+    assert broker.cash >= 0
+    assert broker.qty.get("IEF", 0) * 100 <= 500     # buys used only the cash already there
+    assert any("not fully filled" in n for n in notes)
+
+
+def test_refused_limit_orders_fall_back_to_market(tmp_path):
+    data = make_data()
+    broker = SimBroker(100_000, FUND_PRICES, trading_days(data, [date(2026, 12, 14)]), reject_limit=True)
+    row = go(broker, tmp_path, "2026-12-14", data)
+    assert row["status"].startswith("traded") and broker.sent
+    assert all(o["type"] == "market" and o["client_order_id"].endswith("-m") for o in broker.sent)
+    assert "sent at market" in row["flags"] and broker.cash >= 0
+
+
+def test_fills_up_to_the_limit_never_borrow(tmp_path):
+    data = make_data()
+    worse = {sym: p * 1.0099 for sym, p in FUND_PRICES.items()}               # every fill just inside the limit
+    broker = SimBroker(100_000, FUND_PRICES, trading_days(data, [date(2026, 12, 14)]), fill_prices=worse)
+    go(broker, tmp_path, "2026-12-14", data)
+    assert broker.cash >= 0
+
+
+
+def test_order_check_places_unfillable_orders_and_cancels_them(tmp_path):
+    broker = SimBroker(100_000, FUND_PRICES, [date(2026, 11, 24)])
+    out = bot.check_orders(broker, log_dir=tmp_path, now=at("2026-11-24", 11, 0), pause=0)
+    assert [t["accepted"] for t in out["tests"]] == [True, True]
+    assert all(t["status_after_cancel"] == "canceled" and t["filled_qty"] == 0 for t in out["tests"])
+    assert not broker.qty and broker.cash == 100_000
+    assert all(t["limit_price"] == 50.0 for t in out["tests"])
+    assert (tmp_path / "order_check.json").exists() and set(out["prices"]) == set(bot.MANAGED)
+
+
+def test_order_check_reports_a_refused_limit_order(tmp_path):
+    broker = SimBroker(100_000, FUND_PRICES, [date(2026, 11, 24)], reject_limit=True)
+    out = bot.check_orders(broker, log_dir=tmp_path, now=at("2026-11-24", 11, 0), pause=0)
+    assert out["tests"][0]["accepted"] is False and "422" in out["tests"][0]["error"]

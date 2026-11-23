@@ -70,9 +70,11 @@ class AlpacaBroker:
         return self._get("/v2/orders", status="all", after=pd.Timestamp(after).isoformat(),
                          limit=500, direction="asc")
 
-    def submit(self, symbol, side, client_order_id, qty=None, notional=None):
+    def submit(self, symbol, side, client_order_id, qty=None, notional=None, limit_price=None):
         body = {"symbol": symbol, "side": side, "type": "market", "time_in_force": "day",
                 "client_order_id": client_order_id}
+        if limit_price is not None:
+            body["type"], body["limit_price"] = "limit", f"{limit_price:.2f}"
         if (qty is None) == (notional is None):
             raise ValueError("give qty or notional, not both")
         if qty is not None:
@@ -87,9 +89,13 @@ class AlpacaBroker:
     def cancel(self, order_id):
         self._request("DELETE", self.base + f"/v2/orders/{order_id}")
 
-    def latest_price(self, symbol):
+    def latest_trade(self, symbol):
+        """Latest IEX trade: (price, time). The free data plan gives IEX in real time."""
         t = self._request("GET", f"{DATA_URL}/v2/stocks/{symbol}/trades/latest", params={"feed": "iex"})
-        return float(t["trade"]["p"])
+        return float(t["trade"]["p"]), pd.Timestamp(t["trade"]["t"])
+
+    def latest_price(self, symbol):
+        return self.latest_trade(symbol)[0]
 
     def credited_dividends(self, after):
         """Dividends Alpaca itself credited (paper trading normally credits none)."""
@@ -124,7 +130,8 @@ class SimBroker:
     """In-memory paper account. `prices` maps symbol -> fill price."""
 
     def __init__(self, cash, prices, trading_days, is_open=True, now=None,
-                 partial_fill=None, not_fractionable=(), past_orders=()):
+                 partial_fill=None, not_fractionable=(), past_orders=(), fill_prices=None,
+                 reject_limit=False):
         self.cash = float(cash)
         self.prices = dict(prices)
         self.qty = {}
@@ -135,6 +142,8 @@ class SimBroker:
         self.not_fractionable = set(not_fractionable)
         self.history = list(past_orders)
         self.sent = []
+        self.fill_prices = fill_prices or {}        # symbol -> where trades actually happen (default: prices)
+        self.reject_limit = reject_limit            # act like Alpaca refusing limit orders
 
     def account(self):
         mv = sum(q * self.prices[s] for s, q in self.qty.items())
@@ -157,11 +166,22 @@ class SimBroker:
     def orders_since(self, after):
         return [o for o in self.history if pd.Timestamp(o["submitted_at"]) >= pd.Timestamp(after)]
 
-    def submit(self, symbol, side, client_order_id, qty=None, notional=None):
+    def submit(self, symbol, side, client_order_id, qty=None, notional=None, limit_price=None):
         if any(o["client_order_id"] == client_order_id for o in self.history):
             raise RuntimeError(f"client_order_id {client_order_id} already used")
-        price = self.prices[symbol]
+        if limit_price is not None and self.reject_limit:
+            raise RuntimeError("Alpaca POST /v2/orders failed (422): limit orders not supported here")
+        price = self.fill_prices.get(symbol, self.prices[symbol])
         want = qty if qty is not None else math.floor(notional / price * 1e9) / 1e9
+        if limit_price is not None and ((side == "buy" and price > limit_price) or
+                                        (side == "sell" and price < limit_price)):
+            order = {"id": str(uuid.uuid4()), "client_order_id": client_order_id, "symbol": symbol,
+                     "side": side, "status": "new", "qty": want, "filled_qty": 0.0, "filled_avg_price": None,
+                     "notional": notional, "limit_price": limit_price, "type": "limit",
+                     "submitted_at": self.now.isoformat()}
+            self.history.append(order)
+            self.sent.append(order)
+            return dict(order)
         if symbol in self.not_fractionable and abs(want - round(want)) > 1e-9:
             raise RuntimeError(f"requested asset is not fractionable: {symbol}")
         fill = want * self.partial_fill.get(symbol, 1.0)
@@ -178,6 +198,7 @@ class SimBroker:
         order = {"id": str(uuid.uuid4()), "client_order_id": client_order_id, "symbol": symbol, "side": side,
                  "status": "filled" if fill == want else "partially_filled",
                  "qty": want, "filled_qty": fill, "filled_avg_price": price, "notional": notional,
+                 "limit_price": limit_price, "type": "market" if limit_price is None else "limit",
                  "submitted_at": self.now.isoformat()}
         self.history.append(order)
         self.sent.append(order)
@@ -190,6 +211,9 @@ class SimBroker:
         for o in self.history:
             if o["id"] == order_id and o["status"] not in DONE:
                 o["status"] = "canceled"
+
+    def latest_trade(self, symbol):
+        return self.prices[symbol], self.now
 
     def latest_price(self, symbol):
         return self.prices[symbol]

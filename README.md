@@ -13,8 +13,8 @@ Built by Miles Atkinson. The rules were written down in a spec before any backte
 | Nov 23 | Rules locked at version 2 | Done |
 | Nov 23 | Live bot built and tested on a simulated account | Done |
 | Nov 23 | Versions 5 and 6 tested against version 2 | Done (version 2 stays; versions 1 and 6 run as shadows) |
-| Dec 7 to 13 | Live bot in dry-run mode | Not started |
-| Dec 14 | Live paper trading starts | Not started |
+| Nov 23 to 27 | Live bot in dry-run mode, order check | In progress |
+| Nov 30 | Live paper trading starts (version 2; versions 1 and 6 as shadows) | Not started |
 
 ## Backtest
 
@@ -55,6 +55,7 @@ The full rules are in [SPEC.md](SPEC.md).
 | `bot.py` | The live bot: one run per weekday, trades on the week's first trading day, logs every day (`python bot.py --simulate` runs it against a pretend $100,000 account) |
 | `broker.py` | Talks to Alpaca's paper API and refuses any other address; also holds the pretend account the tests use |
 | `setup/trend-bot.yml` | The GitHub Actions schedule, to be copied to `.github/workflows/` |
+| `setup/order-check.yml` | A one-time, run-by-hand check that the paper account accepts the bot's limit orders |
 | `backtest.py` | Runs a spec version with its benchmarks and variants over 2007 to 2026 (`python backtest.py 2`) and writes `results/v1/` to `results/v6/` |
 | `results/` | Summary, daily equity, every trade, every position from entry to exit, and the chart |
 | `tests/` | Fail if any rule uses future prices, if the portfolio shorts or borrows, if the backtest's dollars don't reconcile, if version 3 holds an ETF before it has a year of prices, or if the live bot ever borrows, trades twice in a week, or trades on stale data |
