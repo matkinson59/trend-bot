@@ -2,11 +2,12 @@
 backtest.py: runs the strategy in SPEC.md over past prices, along with the
 benchmarks, variants and pass/fail bars the spec sets out.
 
-Usage:  python backtest.py
+Usage:  python backtest.py 1    (spec version 1)
+        python backtest.py 2    (spec version 2)
 
-Writes results/summary.md, results/equity.csv, results/trades.csv,
-results/episodes.csv and results/equity.png, and rewrites trials.csv with
-one row per trial.
+Writes summary.md, equity.csv, trades.csv, episodes.csv and equity.png to
+results/v1/ or results/v2/, and rewrites trials.csv with one row per trial
+run so far.
 """
 import os
 from datetime import datetime
@@ -21,7 +22,6 @@ import strategy as s
 COST_BPS = 5               # cost charged on every dollar traded, in basis points
 BUFFER = 0.02              # drift allowed before a position is resized
 START_VALUE = 100_000.0
-SPEC_VERSION = "1"
 RESULTS_DIR = "results"
 NORMAL = NormalDist()
 EULER_GAMMA = 0.5772156649
@@ -245,8 +245,20 @@ def pct(x, digits=1):
     return f"{x * 100:.{digits}f}%"
 
 
-def main():
-    os.makedirs(RESULTS_DIR, exist_ok=True)
+TRIAL_SPECS = [
+    ("main", "Spec v1 as written", "lookbacks 21/63/126/252; vol window 126; T-bill hurdle; equal weights, 10% vol ceiling"),
+    ("lookbacks_short", "Shorter lookbacks", "lookbacks 15/50/100/200"),
+    ("lookbacks_long", "Longer lookbacks", "lookbacks 30/90/180/300"),
+    ("vol_window_63", "63-day volatility window", "vol window 63"),
+    ("zero_hurdle", "0% hurdle", "trend test against 0% instead of T-bills"),
+    ("inverse_vol", "Inverse-volatility weights", "1/vol (63d) base weights, 25% cap"),
+    ("v2", "Spec v2: 10% volatility as a target", "v1 signals; weights scaled to 10% vol, 25% per ETF, 100% max invested"),
+]
+
+
+def main(version=1):
+    out = f"{RESULTS_DIR}/v{version}"
+    os.makedirs(out, exist_ok=True)
     run_time = datetime.now(s.NEW_YORK)
     opens, closes = s.load_bars()
     tbill = s.load_tbill(closes.index)
@@ -259,29 +271,23 @@ def main():
     first_valid = main_targets.index[0]
     start = weekly[weekly & (weekly.index > first_valid)].index[0]
 
-    # --- trials: the main version plus the five planned variants
-    trial_specs = [
-        ("main", "Spec v1 as written", "lookbacks 21/63/126/252; vol window 126; T-bill hurdle; equal weights"),
-        ("lookbacks_short", "Shorter lookbacks", "lookbacks 15/50/100/200"),
-        ("lookbacks_long", "Longer lookbacks", "lookbacks 30/90/180/300"),
-        ("vol_window_63", "63-day volatility window", "vol window 63"),
-        ("zero_hurdle", "0% hurdle", "trend test against 0% instead of T-bills"),
-        ("inverse_vol", "Inverse-volatility weights", "1/vol (63d) base weights, 25% cap"),
-    ]
-    trial_targets = {}
-    trial_targets["main"] = (main_targets, main_scores)
-    trial_targets["lookbacks_short"] = trend_targets(closes, tbill, (15, 50, 100, 200))
-    trial_targets["lookbacks_long"] = trend_targets(closes, tbill, (30, 90, 180, 300))
-    trial_targets["vol_window_63"] = trend_targets(closes, tbill, vol_window=63)
-    trial_targets["zero_hurdle"] = trend_targets(closes, tbill * 0)
-    trial_targets["inverse_vol"] = (inverse_vol_targets(closes, main_scores), main_scores)
+    # Trials: version 1 ran the first six; version 2 adds the seventh.
+    trial_specs = TRIAL_SPECS[:6] if version == 1 else TRIAL_SPECS
+    candidate = "main" if version == 1 else "v2"
+    builders = {
+        "main": lambda: (main_targets, main_scores),
+        "lookbacks_short": lambda: trend_targets(closes, tbill, (15, 50, 100, 200)),
+        "lookbacks_long": lambda: trend_targets(closes, tbill, (30, 90, 180, 300)),
+        "vol_window_63": lambda: trend_targets(closes, tbill, vol_window=63),
+        "zero_hurdle": lambda: trend_targets(closes, tbill * 0),
+        "inverse_vol": lambda: (inverse_vol_targets(closes, main_scores), main_scores),
+        "v2": lambda: (s.target_weights_v2(closes, tbill), main_scores),
+    }
+    trial_targets = {key: builders[key]() for key, _, _ in trial_specs}
+    results = {key: simulate(*trial_targets[key], opens, closes, tbill, weekly, start)
+               for key, _, _ in trial_specs}
 
-    results = {}
-    for key, _, _ in trial_specs:
-        t, sc = trial_targets[key]
-        results[key] = simulate(t, sc, opens, closes, tbill, weekly, start)
-
-    # --- benchmarks
+    # Benchmarks (identical for both versions)
     k = s.shrink_factor(closes)
     ones = pd.DataFrame(1.0, index=closes.index, columns=closes.columns).where(k.notna(), axis=0)
     b1_targets = ones.mul(k / len(closes.columns), axis=0)
@@ -294,76 +300,92 @@ def main():
                        None, opens, closes, tbill, only_start, start, buffer=0.0),
     }
 
-    # --- cost sensitivity for the main version (not trials)
-    costs = {bps: metrics(simulate(main_targets, main_scores, opens, closes, tbill, weekly, start,
+    # Cost sensitivity for the candidate (not trials)
+    cand_targets, cand_scores = trial_targets[candidate]
+    costs = {bps: metrics(simulate(cand_targets, cand_scores, opens, closes, tbill, weekly, start,
                                    cost_bps=bps)[0], tbill) for bps in (5, 10, 20)}
 
-    # --- measurements
+    # Measurements
     m = {key: metrics(results[key][0], tbill) for key in results}
     mb = {key: metrics(bench[key][0], tbill) for key in bench}
     daily_sharpes = [m[key]["excess_daily"].mean() / m[key]["excess_daily"].std() for key, _, _ in trial_specs]
-    dsr, sr0_annual = deflated_sharpe(m["main"]["excess_daily"], daily_sharpes)
-    ep = episode_stats(results["main"][2])
+    dsr, sr0_annual = deflated_sharpe(m[candidate]["excess_daily"], daily_sharpes)
+    dsr_v1 = deflated_sharpe(m["main"]["excess_daily"], daily_sharpes)[0]
+    ep = episode_stats(results[candidate][2])
+    mc = m[candidate]
 
     bars = {
-        "Sharpe ratio beats B1": m["main"]["sharpe"] > mb["B1"]["sharpe"],
-        "Max drawdown smaller than B1": m["main"]["max_drawdown"] > mb["B1"]["max_drawdown"],
-        "Deflated Sharpe ratio at least 0.95": dsr >= 0.95,
+        "sharpe": mc["sharpe"] > mb["B1"]["sharpe"],
+        "drawdown": mc["max_drawdown"] > mb["B1"]["max_drawdown"],
+        "dsr": dsr >= 0.95,
     }
     passed = all(bars.values())
 
     periods = [("2007-2012", "2007", "2012"), ("2013-2019", "2013", "2019"), ("2020-2026", "2020", "2026")]
     sub = {}
     for label, a, b in periods:
-        for name, daily in [("Trend bot", results["main"][0]), ("B1", bench["B1"][0]),
-                            ("B2", bench["B2"][0]), ("B3", bench["B3"][0])]:
+        rows = [(f"Trend bot v{version}", results[candidate][0])]
+        if version == 2:
+            rows.append(("Trend bot v1", results["main"][0]))
+        rows += [("B1", bench["B1"][0]), ("B2", bench["B2"][0]), ("B3", bench["B3"][0])]
+        for name, daily in rows:
             sub[(label, name)] = metrics(daily.loc[a:b], tbill)
 
-    eq = results["main"][0]["equity"]
-    band = eq.pct_change(60).dropna().quantile([0.05, 0.5, 0.95])
+    eq = results[candidate][0]["equity"]
+    r60 = eq.pct_change(60).dropna()
+    band = r60.quantile([0.05, 0.5, 0.95])
 
-    # --- files
-    equity_table = pd.DataFrame({"trend_bot": results["main"][0]["equity"],
-                                 "B1_always_invested": bench["B1"][0]["equity"],
-                                 "B2_60_40": bench["B2"][0]["equity"],
-                                 "B3_SPY": bench["B3"][0]["equity"]}).round(2)
-    equity_table.to_csv(f"{RESULTS_DIR}/equity.csv", index_label="date")
-    results["main"][1].to_csv(f"{RESULTS_DIR}/trades.csv", index=False)
-    episodes = results["main"][2].copy()
+    # Files
+    columns = {f"trend_bot_v{version}": results[candidate][0]["equity"]}
+    if version == 2:
+        columns["trend_bot_v1"] = results["main"][0]["equity"]
+    columns.update({"B1_always_invested": bench["B1"][0]["equity"],
+                    "B2_60_40": bench["B2"][0]["equity"],
+                    "B3_SPY": bench["B3"][0]["equity"]})
+    equity_table = pd.DataFrame(columns).round(2)
+    equity_table.to_csv(f"{out}/equity.csv", index_label="date")
+    results[candidate][1].to_csv(f"{out}/trades.csv", index=False)
+    episodes = results[candidate][2].copy()
     episodes[["entry_equity", "pnl"]] = episodes[["entry_equity", "pnl"]].round(2)
     episodes["return_on_equity"] = episodes["return_on_equity"].round(6)
-    episodes.to_csv(f"{RESULTS_DIR}/episodes.csv", index=False)
+    episodes.to_csv(f"{out}/episodes.csv", index=False)
 
     trial_rows = []
     for n_, (key, desc, settings) in enumerate(trial_specs, start=1):
-        trial_rows.append({"trial_id": n_, "date_run": run_time.date(), "spec_version": SPEC_VERSION,
+        trial_rows.append({"trial_id": n_, "date_run": run_time.date(),
+                           "spec_version": "2" if key == "v2" else "1",
                            "description": desc, "settings": settings,
                            "sharpe_excess": round(m[key]["sharpe"], 3),
                            "max_drawdown": round(m[key]["max_drawdown"], 4),
                            "notes": "planned in SPEC.md"})
     pd.DataFrame(trial_rows).to_csv("trials.csv", index=False)
 
-    make_chart(equity_table)
+    make_chart(equity_table, out, version)
 
-    # --- summary.md
-    L = []
-    L.append("# Backtest results, spec v1\n")
+    # summary.md
+    name = f"Trend bot (v{version})"
+    L = [f"# Backtest results, spec version {version}\n"]
     L.append(f"Run on {run_time:%Y-%m-%d %H:%M} ET with Yahoo Finance data downloaded at run time. "
              f"Simulation from {start.date()} to {closes.index[-1].date()}, starting at ${START_VALUE:,.0f}. "
              f"Trades fill at the next day's open with a {COST_BPS} bp cost; cash earns the 13-week T-bill rate.\n")
     L.append(f"**Result: {'PASS' if passed else 'FAIL'}** on the three bars set in SPEC.md before this run.\n")
     L.append("| Bar | Result |\n| --- | --- |")
-    L.append(f"| Sharpe ratio beats B1 | {m['main']['sharpe']:.2f} vs {mb['B1']['sharpe']:.2f}: {'yes' if bars['Sharpe ratio beats B1'] else 'no'} |")
-    L.append(f"| Max drawdown smaller than B1 | {pct(m['main']['max_drawdown'])} vs {pct(mb['B1']['max_drawdown'])}: {'yes' if bars['Max drawdown smaller than B1'] else 'no'} |")
-    L.append(f"| Deflated Sharpe ratio at least 0.95 | {dsr:.3f} ({len(trial_specs)} trials): {'yes' if bars['Deflated Sharpe ratio at least 0.95'] else 'no'} |\n")
+    L.append(f"| Sharpe ratio beats B1 | {mc['sharpe']:.2f} vs {mb['B1']['sharpe']:.2f}: {'yes' if bars['sharpe'] else 'no'} |")
+    L.append(f"| Max drawdown smaller than B1 | {pct(mc['max_drawdown'])} vs {pct(mb['B1']['max_drawdown'])}: {'yes' if bars['drawdown'] else 'no'} |")
+    L.append(f"| Deflated Sharpe ratio at least 0.95 | {dsr:.3f} ({len(trial_specs)} trials): {'yes' if bars['dsr'] else 'no'} |\n")
+    if version == 2:
+        L.append(f"Counting all seven trials, version 1's deflated Sharpe ratio is now {dsr_v1:.3f}.\n")
 
     L.append("## Full period\n")
     L.append("| Portfolio | Annual return | Annual volatility | Sharpe (vs T-bills) | Max drawdown | Worst calendar year | Turnover per year | Average invested |")
     L.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
-    rows = [("Trend bot", m["main"]), ("B1: same ETFs, always invested", mb["B1"]),
-            ("B2: 60% SPY / 40% IEF", mb["B2"]), ("B3: SPY buy and hold", mb["B3"])]
-    for name, x in rows:
-        L.append(f"| {name} | {pct(x['annual_return'])} | {pct(x['annual_vol'])} | {x['sharpe']:.2f} | "
+    rows = [(name, mc)]
+    if version == 2:
+        rows.append(("Trend bot (v1)", m["main"]))
+    rows += [("B1: same ETFs, always invested", mb["B1"]), ("B2: 60% SPY / 40% IEF", mb["B2"]),
+             ("B3: SPY buy and hold", mb["B3"])]
+    for label, x in rows:
+        L.append(f"| {label} | {pct(x['annual_return'])} | {pct(x['annual_vol'])} | {x['sharpe']:.2f} | "
                  f"{pct(x['max_drawdown'])} | {pct(x['worst_year'])} ({x['worst_year_label']}) | "
                  f"{pct(x['turnover'], 0)} | {pct(x['invested'], 0)} |")
     L.append("\nFirst and last calendar years are partial (2007 starts in February, 2026 ends in November).\n")
@@ -371,8 +393,8 @@ def main():
 
     L.append("## Sub-periods\n")
     L.append("| Period | Portfolio | Annual return | Sharpe | Max drawdown |\n| --- | --- | --- | --- | --- |")
-    for (label, name), x in sub.items():
-        L.append(f"| {label} | {name} | {pct(x['annual_return'])} | {x['sharpe']:.2f} | {pct(x['max_drawdown'])} |")
+    for (label, pname), x in sub.items():
+        L.append(f"| {label} | {pname} | {pct(x['annual_return'])} | {x['sharpe']:.2f} | {pct(x['max_drawdown'])} |")
 
     L.append("\n## Expectancy per trade\n")
     L.append("A trade is one stretch from opening a position in an ETF to fully exiting it, including resizes in between. "
@@ -389,7 +411,7 @@ def main():
     for n_, (key, desc, _) in enumerate(trial_specs, start=1):
         L.append(f"| {n_} | {desc} | {pct(m[key]['annual_return'])} | {m[key]['sharpe']:.2f} | {pct(m[key]['max_drawdown'])} |")
 
-    L.append("\n## Cost sensitivity (main version)\n")
+    L.append(f"\n## Cost sensitivity (version {version})\n")
     L.append("| Cost per dollar traded | Annual return | Sharpe |\n| --- | --- | --- |")
     for bps, x in costs.items():
         L.append(f"| {bps} bp | {pct(x['annual_return'])} | {x['sharpe']:.2f} |")
@@ -397,29 +419,27 @@ def main():
     L.append("\n## Expected range for the live run\n")
     L.append(f"Over every 60-trading-day window in the backtest, the bot's return ran from {pct(band.loc[0.05])} "
              f"(5th percentile) to {pct(band.loc[0.95])} (95th percentile), with a median of {pct(band.loc[0.5])}. "
-             "The live paper run is judged against this band.\n")
+             f"{pct((r60 > 0).mean(), 0)} of those windows ended positive. The live paper run is judged against this band.\n")
 
-    with open(f"{RESULTS_DIR}/summary.md", "w") as f:
+    with open(f"{out}/summary.md", "w") as f:
         f.write("\n".join(L))
-
     print("\n".join(L))
-    return {"m": m, "mb": mb, "dsr": dsr, "start": start, "results": results, "bench": bench,
-            "opens": opens, "closes": closes, "tbill": tbill}
 
 
-def make_chart(equity_table):
+def make_chart(equity_table, out, version):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    labels = {"trend_bot": "Trend bot", "B1_always_invested": "B1: same ETFs, always invested",
+    labels = {f"trend_bot_v{version}": f"Trend bot (v{version})", "trend_bot_v1": "Trend bot (v1)",
+              "B1_always_invested": "B1: same ETFs, always invested",
               "B2_60_40": "B2: 60/40 SPY/IEF", "B3_SPY": "B3: SPY"}
     fig, (top, bottom) = plt.subplots(2, 1, figsize=(10, 7), sharex=True,
                                       gridspec_kw={"height_ratios": [3, 1.4]})
-    for col, label in labels.items():
+    for col in equity_table.columns:
         series = equity_table[col] / equity_table[col].iloc[0]
-        width = 2.2 if col == "trend_bot" else 1.1
-        top.plot(series.index, series.values, label=label, linewidth=width)
+        width = 2.2 if col == f"trend_bot_v{version}" else 1.1
+        top.plot(series.index, series.values, label=labels[col], linewidth=width)
         dd = equity_table[col] / equity_table[col].cummax() - 1
         bottom.plot(dd.index, dd.values * 100, linewidth=width)
     top.set_yscale("log")
@@ -427,13 +447,14 @@ def make_chart(equity_table):
     top.yaxis.set_major_formatter(dollars)
     top.yaxis.set_minor_formatter(dollars)
     top.set_ylabel("Growth of $1 (log scale)")
-    top.set_title("Trend bot vs benchmarks, after costs")
+    top.set_title(f"Trend bot v{version} vs benchmarks, after costs")
     top.legend(loc="upper left")
     bottom.set_ylabel("Drawdown (%)")
     fig.tight_layout()
-    fig.savefig(f"{RESULTS_DIR}/equity.png", dpi=130)
+    fig.savefig(f"{out}/equity.png", dpi=130)
     plt.close(fig)
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    main(int(sys.argv[1]) if len(sys.argv) > 1 else 1)
