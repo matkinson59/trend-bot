@@ -9,29 +9,28 @@ Built by Miles Atkinson. The rules were written down in a spec before any backte
 | Dates | Work | State |
 | --- | --- | --- |
 | Nov 23 to 29, 2026 | Trading rules and data loader | Done |
-| Nov 30 to Dec 6 | Backtest, benchmarks and validation | Done (both versions passed) |
+| Nov 30 to Dec 6 | Backtest, benchmarks and validation | Done (versions 1 and 2 passed; 3 and 4 failed) |
 | Dec 7 to 13 | Live bot in dry-run mode, spec locked | Not started |
 | Dec 14 | Live paper trading starts | Not started |
 
 ## Backtest
 
-Two versions of the sizing rule were written into the spec before each was tested. Version 1 treats 10% volatility as a ceiling. Version 2 treats it as a target, adding risk up to 25% per ETF and 100% invested. Both use the same signals and were tested from February 2007 to November 2026 with a 5 basis point cost on every trade.
+Four versions were written into the spec before each was tested, from February 2007 to November 2026, starting with $100,000 and paying a 5 basis point cost on every trade. Version 1 treats 10% volatility as a ceiling, version 2 as a target, version 3 adds four ETFs to version 2, and version 4 is version 3 at 1.5 times the size through 2x funds.
 
-| Portfolio | Annual return | Volatility | Sharpe | Max drawdown | Worst year |
-| --- | --- | --- | --- | --- | --- |
-| Version 1 | 3.8% | 5.1% | 0.46 | -7.2% | -2.9% |
-| Version 2 | 5.0% | 8.1% | 0.45 | -15.5% | -8.8% |
-| Same ETFs, always invested | 4.7% | 8.9% | 0.38 | -26.8% | -16.6% |
-| 60% SPY / 40% IEF | 7.8% | 11.0% | 0.60 | -32.5% | -17.9% |
-| SPY | 10.3% | 19.6% | 0.52 | -55.2% | -36.8% |
+| Portfolio | Ending value | Annual return | Volatility | Sharpe | Max drawdown | Passed its bars |
+| --- | --- | --- | --- | --- | --- | --- |
+| Version 1 | $207,997 | 3.8% | 5.1% | 0.46 | -7.2% | Yes |
+| Version 2 | $259,331 | 5.0% | 8.1% | 0.45 | -15.5% | Yes |
+| Version 3 | $215,498 | 4.0% | 7.7% | 0.35 | -15.2% | No |
+| Version 4 | $231,481 | 4.4% | 10.8% | 0.31 | -20.9% | No |
+| 60% SPY / 40% IEF | $440,824 | 7.8% | 11.0% | 0.60 | -32.5% | |
+| SPY | $686,599 | 10.3% | 19.6% | 0.52 | -55.2% | |
 
-Both versions cleared the three bars set in the spec: a higher Sharpe ratio than the always-invested version, a smaller maximum drawdown, and a deflated Sharpe ratio of at least 0.95 (0.955 for version 1, 0.952 for version 2, counting all seven trials). Neither earned as much as SPY or a 60/40 portfolio.
+Versions 3 and 4 failed the deflated Sharpe ratio bar (0.875 and 0.810 against 0.95). Counting all nine trials run so far, versions 1 and 2 also fall just below it (0.936 and 0.932). No version earned as much as SPY or a 60/40 portfolio.
 
-Full results: [version 1](results/v1/summary.md), [version 2](results/v2/summary.md).
+Full results: [comparison of all versions](results/comparison.md), [version 1](results/v1/summary.md), [version 2](results/v2/summary.md), [version 3](results/v3/summary.md), [version 4](results/v4/summary.md).
 
-Version 3 is written into the spec and the code but has not been run yet. It keeps version 2's sizing and adds four ETFs (UUP for the US dollar, FXY for the yen, DBB for industrial metals and DBA for agriculture), based on a review of trend-following research. The reasons, the studies, and the ideas it leaves out are in [SPEC.md](SPEC.md#version-3-13-etfs). Version 4 is version 3 at 1.5 times the size, with exposure above 100% held through 2x funds; it is also in the spec and not yet run.
-
-![Equity curves](results/v2/equity.png)
+![Growth of $100,000](results/comparison.png)
 
 ## The rules
 

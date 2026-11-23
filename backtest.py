@@ -414,8 +414,9 @@ def main(version=1, end=None, out_root=RESULTS_DIR, trials_path="trials.csv", qu
              f"Trades fill at the next day's open with a {COST_BPS} bp cost; cash earns the 13-week T-bill rate.\n")
     L.append(f"**Result: {'PASS' if passed else 'FAIL'}** on the three bars set in SPEC.md before this run.\n")
     L.append("| Bar | Result |\n| --- | --- |")
-    L.append(f"| Sharpe ratio beats {control} | {mc['sharpe']:.2f} vs {mb[control]['sharpe']:.2f}: {'yes' if bars['sharpe'] else 'no'} |")
-    L.append(f"| Max drawdown smaller than {control} | {pct(mc['max_drawdown'])} vs {pct(mb[control]['max_drawdown'])}: {'yes' if bars['drawdown'] else 'no'} |")
+    short = {"B1": "B1", "B1_13": "B1 (13 ETFs)", "B1_v4": "B1 (13 ETFs at 1.5x)"}[control]
+    L.append(f"| Sharpe ratio beats {short} | {mc['sharpe']:.2f} vs {mb[control]['sharpe']:.2f}: {'yes' if bars['sharpe'] else 'no'} |")
+    L.append(f"| Max drawdown smaller than {short} | {pct(mc['max_drawdown'])} vs {pct(mb[control]['max_drawdown'])}: {'yes' if bars['drawdown'] else 'no'} |")
     L.append(f"| Deflated Sharpe ratio at least 0.95 | {dsr:.3f} ({len(trial_specs)} trials): {'yes' if bars['dsr'] else 'no'} |\n")
     for key, value in dsr_earlier.items():
         name = {"main": "version 1", "v2": "version 2", "v3": "version 3"}[key]

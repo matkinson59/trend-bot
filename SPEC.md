@@ -244,6 +244,8 @@ Expectation, written before the run: a modest change. More independent markets s
 
 Decision rule, set now: if version 3 fails any bar, it is dropped. If it passes, Miles picks among the versions that passed, and the write-up reports all of them. Version 3 is the last rule change at the 10% risk level under the long-or-cash rule. Any further version would change the risk level or that rule, and it would count as trial 9.
 
+Result (Nov 23, 2026): failed. Sharpe 0.35 against B1's 0.31 and drawdown -15.2% against -25.2% passed, but the deflated Sharpe ratio was 0.875 over eight trials. Return was 4.0% a year, below the range expected above. Version 3 is dropped. The four new funds earned $3,700 between them, but with the 100% limit binding they took money from SPY, GLD and DBC, whose combined profit fell by $34,800 compared with version 2.
+
 ### Live-trading changes in version 3
 
 These do not change the backtest. They make the paper account's results comparable with it.
@@ -328,6 +330,8 @@ Expectation, written before the run: leverage does not raise the Sharpe ratio, a
 Live trading: five of the seven 2x funds trade under $1.5M a day, so real orders would pay wider spreads than the 5 bp assumed; a $100,000 paper account would not notice. The funds reset to 2x every day, which the simulated prices already include.
 
 Decision rule, set now: if version 4 fails any bar, it is dropped. If it passes, Miles picks among the versions that passed, and the write-up reports all of them. Any further version counts as trial 10.
+
+Result (Nov 23, 2026): failed. Sharpe 0.31 against B1's 0.29 and drawdown -20.9% against -33.8% passed, but the deflated Sharpe ratio was 0.810 over nine trials. Return was 4.4% a year at 10.8% volatility, with an average exposure of 136%. The expectation above held relative to version 3. Version 4 is dropped. Counting all nine trials, version 1's deflated Sharpe ratio is 0.936 and version 2's is 0.932.
 
 Sources for version 4:
 
