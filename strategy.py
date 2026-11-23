@@ -24,6 +24,18 @@ TICKERS = ["SPY", "EFA", "EEM", "VNQ", "IEF", "TLT", "TIP", "GLD", "DBC"]
 # has a full year of prices.
 TICKERS_V3 = TICKERS + ["UUP", "FXY", "DBB", "DBA"]
 CASH_ETF = "BOXX"                # live bot only: holds idle cash (see SPEC.md, version 3)
+
+# Spec version 4: version 3 at 1.5 times the size. Exposure above 100% of
+# equity is held through these 2x funds (each one returns about twice its
+# 1x ETF's daily move).
+LEVERAGE_V4 = 1.5
+TWO_X = {"SPY": "SSO", "EFA": "EFO", "EEM": "EET", "VNQ": "URE",
+         "IEF": "UST", "TLT": "UBT", "GLD": "UGL"}
+# Yearly cost of each 2x fund above "2 x the 1x ETF's return, minus T-bill
+# interest on the borrowed half", measured over each fund's full history to
+# Nov 20, 2026 by tools/two_x_costs.py. It covers fees and tracking costs.
+TWO_X_COST = {"SSO": 0.0155, "EFO": 0.0203, "EET": 0.0165, "URE": 0.0260,
+              "UST": 0.0064, "UBT": 0.0062, "UGL": 0.0251}
 TBILL_TICKER = "^IRX"            # 13-week T-bill yield in percent (4.12 means 4.12%)
 LOOKBACKS = (21, 63, 126, 252)   # trading days: roughly 1, 3, 6 and 12 months
 VOL_WINDOW = 126                 # days of returns used to estimate portfolio volatility
@@ -209,7 +221,7 @@ def target_weights_v2(prices, tbill):
     return pd.DataFrame(w, index=prices.index, columns=prices.columns)[valid]
 
 
-def target_weights_v3(prices, tbill, scores=None):
+def target_weights_v3(prices, tbill, scores=None, leverage=1.0):
     """Spec version 3: the version 2 sizing rule over a universe whose ETFs
     started trading on different dates.
 
@@ -227,9 +239,17 @@ def target_weights_v3(prices, tbill, scores=None):
 
     `scores` can be passed in (the always-invested benchmark uses 1 for
     every ETF taking part); by default they are the trend scores.
+
+    `leverage` multiplies all three limits (10% volatility, 25% per ETF,
+    100% in total), which multiplies every weight by the same number.
+    Version 4 uses 1.5. Weights here are exposures: with leverage above 1
+    they can add up to more than 100%, and split_two_x decides how to hold them.
     """
     if scores is None:
         scores = trend_scores(prices, tbill)
+    target_vol = TARGET_VOL * leverage
+    max_weight = MAX_WEIGHT * leverage
+    max_total = 1.0 * leverage
     returns = prices.pct_change().values
     S = scores.values
     weights = np.full(S.shape, np.nan)
@@ -245,13 +265,87 @@ def target_weights_v3(prices, tbill, scores=None):
         if raw.sum() > 0:
             cov = np.cov(window, rowvar=False, ddof=1) * TRADING_DAYS
             mix_vol = np.sqrt(raw @ cov @ raw)
-            w_active = np.minimum(raw * TARGET_VOL / mix_vol, MAX_WEIGHT)
-            if w_active.sum() > 1.0:
-                w_active = w_active / w_active.sum()
+            w_active = np.minimum(raw * target_vol / mix_vol, max_weight)
+            if w_active.sum() > max_total:
+                w_active = w_active * max_total / w_active.sum()
             w[active] = w_active
         weights[t] = w
     out = pd.DataFrame(weights, index=prices.index, columns=prices.columns)
     return out.dropna(how="all")
+
+
+def split_two_x(exposures):
+    """Turn exposures (which may add up to more than 100%) into holdings
+    that fit in 100% of equity, using the 2x funds in TWO_X.
+
+    While total exposure is at most 100%, everything is held in 1x ETFs.
+    Above that, the same share of every ETF that has a 2x fund moves into
+    that fund, just enough that the holdings add up to 100%. Each dollar
+    moved frees half a dollar, because the 2x fund gives twice the exposure.
+    If even moving all of them is not enough, every exposure is scaled
+    down by the same factor until it fits.
+
+    Returns holdings (share of equity) with one column per 1x ETF and one
+    per 2x fund. The account itself never borrows.
+    """
+    exp = exposures.fillna(0.0)
+    lev = [t for t in exp.columns if t in TWO_X]
+    total = exp.sum(axis=1)
+    levered = exp[lev].sum(axis=1)
+    plain = total - levered
+    # capital needed if every levered ETF sat fully in its 2x fund
+    floor = plain + levered / 2
+    shrink = (1.0 / floor).where(floor > 1.0, 1.0)
+    exp = exp.mul(shrink, axis=0)
+    total, levered = total * shrink, levered * shrink
+    with np.errstate(divide="ignore", invalid="ignore"):
+        moved = (2 * (total - 1.0) / levered).clip(lower=0.0, upper=1.0).fillna(0.0)
+    holdings = exp.copy()
+    for t in lev:
+        holdings[t] = exp[t] * (1 - moved)
+        holdings[TWO_X[t]] = exp[t] * moved / 2
+    return holdings
+
+
+def two_x_bars(opens, closes, tbill):
+    """Simulated daily prices for the 2x funds, built from their 1x ETFs.
+
+    Each day a 2x fund moves twice its 1x ETF's move, minus T-bill interest
+    on the borrowed half and its measured yearly cost (TWO_X_COST), both
+    charged daily. Its open moves twice the 1x ETF's overnight move. The
+    backtest uses these for every date, including years before the real
+    funds existed; the live bot trades the real funds.
+    """
+    y = tbill.reindex(closes.index).ffill().bfill().shift(1).bfill()
+    out_o, out_c = {}, {}
+    for one, two in TWO_X.items():
+        c, o = closes[one].values, opens[one].values
+        cost = (y.values + TWO_X_COST[two]) / TRADING_DAYS
+        c2 = np.empty(len(c))
+        o2 = np.empty(len(c))
+        c2[0], o2[0] = 100.0, 100.0 * o[0] / c[0]
+        for i in range(1, len(c)):
+            c2[i] = c2[i - 1] * (1 + 2 * (c[i] / c[i - 1] - 1) - cost[i])
+            o2[i] = c2[i - 1] * (1 + 2 * (o[i] / c[i - 1] - 1))
+        out_o[two], out_c[two] = o2, c2
+    return (pd.DataFrame(out_o, index=closes.index),
+            pd.DataFrame(out_c, index=closes.index))
+
+
+def target_weights_v4(prices, tbill, scores=None):
+    """Spec version 4: version 3's weights times 1.5, held through 2x
+    funds where they don't fit in 100% of equity (see split_two_x)."""
+    exposures = target_weights_v3(prices, tbill, scores=scores, leverage=LEVERAGE_V4)
+    return split_two_x(exposures)
+
+
+def exposure_of(holdings):
+    """Exposure to each 1x ETF implied by holdings that include 2x funds."""
+    exp = holdings[[c for c in holdings.columns if c not in TWO_X.values()]].copy()
+    for one, two in TWO_X.items():
+        if two in holdings.columns:
+            exp[one] = exp[one] + 2 * holdings[two]
+    return exp
 
 
 def latest_targets(prices, tbill):

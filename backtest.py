@@ -5,6 +5,8 @@ benchmarks, variants and pass/fail bars the spec sets out.
 Usage:  python backtest.py 1    (spec version 1)
         python backtest.py 2    (spec version 2)
         python backtest.py 3    (spec version 3)
+        python backtest.py 4    (spec version 4)
+        python backtest.py compare   (table and chart of all versions, after the version 4 run)
 
 Writes summary.md, equity.csv, trades.csv, episodes.csv and equity.png to
 results/v1/, results/v2/ or results/v3/, and rewrites trials.csv with one
@@ -255,15 +257,17 @@ TRIAL_SPECS = [
     ("inverse_vol", "Inverse-volatility weights", "1/vol (63d) base weights, 25% cap"),
     ("v2", "Spec v2: 10% volatility as a target", "v1 signals; weights scaled to 10% vol, 25% per ETF, 100% max invested"),
     ("v3", "Spec v3: 13 ETFs", "v2 sizing; adds UUP, FXY, DBB, DBA, each joining after 252 days of prices"),
+    ("v4", "Spec v4: v3 at 1.5x through 2x funds", "v3 limits x1.5 (15% vol, 37.5% per ETF, 150% exposure); 2x funds above 100%; simulated 2x prices with measured costs"),
 ]
-TRIALS_BY_VERSION = {1: 6, 2: 7, 3: 8}
-CANDIDATE = {1: "main", 2: "v2", 3: "v3"}
-SPEC_OF_TRIAL = {"v2": "2", "v3": "3"}
-LABEL = {"main": "Trend bot (v1)", "v2": "Trend bot (v2)", "v3": "Trend bot (v3)",
+TRIALS_BY_VERSION = {1: 6, 2: 7, 3: 8, 4: 9}
+CANDIDATE = {1: "main", 2: "v2", 3: "v3", 4: "v4"}
+SPEC_OF_TRIAL = {"v2": "2", "v3": "3", "v4": "4"}
+LABEL = {"main": "Trend bot (v1)", "v2": "Trend bot (v2)", "v3": "Trend bot (v3)", "v4": "Trend bot (v4)",
          "B1": "B1: same 9 ETFs, always invested", "B1_13": "B1: same 13 ETFs, always invested",
+         "B1_v4": "B1: same 13 ETFs, always invested at 1.5x",
          "B2": "B2: 60% SPY / 40% IEF", "B3": "B3: SPY buy and hold"}
-COLUMN = {"main": "trend_bot_v1", "v2": "trend_bot_v2", "v3": "trend_bot_v3",
-          "B1": "B1_always_invested", "B1_13": "B1_13_always_invested",
+COLUMN = {"main": "trend_bot_v1", "v2": "trend_bot_v2", "v3": "trend_bot_v3", "v4": "trend_bot_v4",
+          "B1": "B1_always_invested", "B1_13": "B1_13_always_invested", "B1_v4": "B1_v4_always_invested",
           "B2": "B2_60_40", "B3": "B3_SPY"}
 
 
@@ -290,6 +294,14 @@ def main(version=1, end=None, out_root=RESULTS_DIR, trials_path="trials.csv", qu
     start = weekly[weekly & (weekly.index > first_valid)].index[0]
 
     # Each trial: (targets, scores, opens, closes) for the simulator
+    if version >= 4:
+        # 2x funds: simulated prices from their 1x ETFs; each takes its 1x ETF's trend score
+        o2, c2 = s.two_x_bars(opens13.bfill(), closes13.bfill(), tbill)
+        bars_v4 = (pd.concat([opens13.bfill(), o2], axis=1), pd.concat([closes13.bfill(), c2], axis=1))
+
+        def with_two_x(scores):
+            return pd.concat([scores, scores[list(s.TWO_X)].rename(columns=s.TWO_X)], axis=1)
+
     trial_specs = TRIAL_SPECS[:TRIALS_BY_VERSION[version]]
     candidate = CANDIDATE[version]
     bars9 = (opens, closes)
@@ -305,6 +317,8 @@ def main(version=1, end=None, out_root=RESULTS_DIR, trials_path="trials.csv", qu
         # simulator sees a flat, untradeable line; the ETF's weight is 0 then.
         "v3": lambda: (s.target_weights_v3(closes13, tbill), s.trend_scores(closes13, tbill),
                        opens13.bfill(), closes13.bfill()),
+        "v4": lambda: (s.target_weights_v4(closes13, tbill), with_two_x(s.trend_scores(closes13, tbill)),
+                       *bars_v4),
     }
     trial_inputs = {key: builders[key]() for key, _, _ in trial_specs}
     results = {key: simulate(t, sc, o, c, tbill, weekly, start)
@@ -329,7 +343,11 @@ def main(version=1, end=None, out_root=RESULTS_DIR, trials_path="trials.csv", qu
         ones13 = scores13.notna().astype(float).where(scores13.notna())
         bench["B1_13"] = simulate(s.target_weights_v3(closes13, tbill, scores=ones13), ones13,
                                   opens13.bfill(), closes13.bfill(), tbill, weekly, start)
-    control = "B1_13" if version >= 3 else "B1"
+    if version >= 4:
+        # Version 4's control: the same 13 ETFs always held, at 1.5x through 2x funds
+        bench["B1_v4"] = simulate(s.target_weights_v4(closes13, tbill, scores=ones13), with_two_x(ones13),
+                                  *bars_v4, tbill, weekly, start)
+    control = {1: "B1", 2: "B1", 3: "B1_13", 4: "B1_v4"}[version]
 
     # Cost sensitivity for the candidate (not trials)
     t_c, sc_c, o_c, c_c = trial_inputs[candidate]
@@ -341,7 +359,7 @@ def main(version=1, end=None, out_root=RESULTS_DIR, trials_path="trials.csv", qu
     mb = {key: metrics(bench[key][0], tbill) for key in bench}
     daily_sharpes = [m[key]["excess_daily"].mean() / m[key]["excess_daily"].std() for key, _, _ in trial_specs]
     dsr, sr0_annual = deflated_sharpe(m[candidate]["excess_daily"], daily_sharpes)
-    earlier = [key for key in ("main", "v2") if key in m and key != candidate]
+    earlier = [key for key in ("main", "v2", "v3") if key in m and key != candidate]
     dsr_earlier = {key: deflated_sharpe(m[key]["excess_daily"], daily_sharpes)[0] for key in earlier}
     ep = episode_stats(results[candidate][2])
     mc = m[candidate]
@@ -353,8 +371,8 @@ def main(version=1, end=None, out_root=RESULTS_DIR, trials_path="trials.csv", qu
     }
     passed = all(bars.values())
 
-    versions_shown = [candidate] + [key for key in ("v2", "main") if key in m and key != candidate]
-    bench_shown = [control] + (["B1"] if control != "B1" else []) + ["B2", "B3"]
+    versions_shown = [candidate] + [key for key in ("v3", "v2", "main") if key in m and key != candidate]
+    bench_shown = [control] + (["B1"] if control == "B1_13" else []) + ["B2", "B3"]
     series = {**{key: results[key][0] for key in versions_shown}, **{key: bench[key][0] for key in bench_shown}}
 
     periods = [("2007-2012", "2007", "2012"), ("2013-2019", "2013", "2019"), ("2020-2026", "2020", "2026")]
@@ -400,7 +418,7 @@ def main(version=1, end=None, out_root=RESULTS_DIR, trials_path="trials.csv", qu
     L.append(f"| Max drawdown smaller than {control} | {pct(mc['max_drawdown'])} vs {pct(mb[control]['max_drawdown'])}: {'yes' if bars['drawdown'] else 'no'} |")
     L.append(f"| Deflated Sharpe ratio at least 0.95 | {dsr:.3f} ({len(trial_specs)} trials): {'yes' if bars['dsr'] else 'no'} |\n")
     for key, value in dsr_earlier.items():
-        name = {"main": "version 1", "v2": "version 2"}[key]
+        name = {"main": "version 1", "v2": "version 2", "v3": "version 3"}[key]
         L.append(f"Counting all {len(trial_specs)} trials, {name}'s deflated Sharpe ratio is now {value:.3f}.\n")
 
     L.append("## Full period\n")
@@ -412,6 +430,10 @@ def main(version=1, end=None, out_root=RESULTS_DIR, trials_path="trials.csv", qu
                  f"{pct(x['max_drawdown'])} | {pct(x['worst_year'])} ({x['worst_year_label']}) | "
                  f"{pct(x['turnover'], 0)} | {pct(x['invested'], 0)} |")
     L.append("\nFirst and last calendar years are partial (2007 starts in February, 2026 ends in November).\n")
+    if version >= 4:
+        exp_total = s.exposure_of(trial_inputs["v4"][0]).sum(axis=1).loc[start:]
+        L.append(f"Average invested counts dollars held. Version 4's average exposure, counting each 2x fund twice, "
+                 f"was {pct(exp_total.mean(), 0)}, and its highest was {pct(exp_total.max(), 0)}.\n")
     L.append("![Equity curves](equity.png)\n")
 
     L.append("## Sub-periods\n")
@@ -478,6 +500,71 @@ def make_chart(equity_table, out, version):
     plt.close(fig)
 
 
+def compare(source=f"{RESULTS_DIR}/v4/equity.csv", out_root=RESULTS_DIR):
+    """Side-by-side table and chart of the four versions, SPY and 60/40,
+    from the equity curves the version 4 run saved. Writes
+    results/comparison.md and results/comparison.png."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    cols = {"trend_bot_v1": "Version 1", "trend_bot_v2": "Version 2", "trend_bot_v3": "Version 3",
+            "trend_bot_v4": "Version 4", "B2_60_40": "60% SPY / 40% IEF", "B3_SPY": "SPY"}
+    eq = pd.read_csv(source, index_col="date", parse_dates=True)[list(cols)]
+    tbill = s.load_tbill(eq.index)
+    r = eq.pct_change().dropna()
+    rf = tbill.shift(1).reindex(r.index) / s.TRADING_DAYS
+    years = len(r) / s.TRADING_DAYS
+    year_end = eq.groupby(eq.index.year).last()
+    yearly = year_end.pct_change()
+    yearly.iloc[0] = year_end.iloc[0] / eq.iloc[0] - 1
+
+    L = ["# Comparison: versions 1 to 4, SPY and 60/40\n"]
+    L.append(f"Each starts with ${START_VALUE:,.0f} on {eq.index[0].date()} and runs to {eq.index[-1].date()}, "
+             f"after a {COST_BPS} bp cost on every trade. Sharpe ratios are measured against T-bills.\n")
+    L.append("| Portfolio | Ending value | Annual return | Volatility | Sharpe | Max drawdown | Worst year | Best year |")
+    L.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
+    for col, name in cols.items():
+        x = r[col] - rf
+        dd = (eq[col] / eq[col].cummax() - 1).min()
+        L.append(f"| {name} | ${eq[col].iloc[-1]:,.0f} | {pct((eq[col].iloc[-1] / eq[col].iloc[0]) ** (1 / years) - 1)} | "
+                 f"{pct(r[col].std() * sqrt(s.TRADING_DAYS))} | {x.mean() / x.std() * sqrt(s.TRADING_DAYS):.2f} | "
+                 f"{pct(dd)} | {pct(yearly[col].min())} ({yearly[col].idxmin()}) | "
+                 f"{pct(yearly[col].max())} ({yearly[col].idxmax()}) |")
+    L.append("\n![Growth of $100,000](comparison.png)\n")
+    L.append("## Calendar-year returns\n")
+    L.append("2007 starts on Feb 12 and 2026 ends on Nov 20.\n")
+    L.append("| Year | " + " | ".join(cols.values()) + " |")
+    L.append("| --- |" + " --- |" * len(cols))
+    for year, row in yearly.iterrows():
+        L.append(f"| {year} | " + " | ".join(pct(row[c]) for c in cols) + " |")
+    with open(f"{out_root}/comparison.md", "w") as f:
+        f.write("\n".join(L) + "\n")
+
+    fig, (top, bottom) = plt.subplots(2, 1, figsize=(10, 7.5), sharex=True,
+                                      gridspec_kw={"height_ratios": [3, 1.4]})
+    for col, name in cols.items():
+        width = 2.0 if col.startswith("trend") else 1.4
+        style = "--" if not col.startswith("trend") else "-"
+        top.plot(eq.index, eq[col], label=name, linewidth=width, linestyle=style)
+        bottom.plot(eq.index, (eq[col] / eq[col].cummax() - 1) * 100, linewidth=width, linestyle=style)
+    top.set_yscale("log")
+    money = matplotlib.ticker.FuncFormatter(lambda v, _: f"${v / 1000:,.0f}k")
+    top.yaxis.set_major_formatter(money)
+    top.yaxis.set_minor_formatter(money)
+    top.set_ylabel("Value of $100,000 (log scale)")
+    top.set_title("Trend bot versions 1 to 4 vs SPY and 60/40, after costs")
+    top.legend(loc="upper left")
+    bottom.set_ylabel("Drawdown (%)")
+    fig.tight_layout()
+    fig.savefig(f"{out_root}/comparison.png", dpi=130)
+    plt.close(fig)
+    print("\n".join(L))
+
+
 if __name__ == "__main__":
     import sys
-    main(int(sys.argv[1]) if len(sys.argv) > 1 else 1)
+    if len(sys.argv) > 1 and sys.argv[1] == "compare":
+        compare()
+    else:
+        main(int(sys.argv[1]) if len(sys.argv) > 1 else 1)

@@ -283,3 +283,55 @@ These do not change the backtest. They make the paper account's results comparab
 - Avellaneda and Zhang (2010), "Path-Dependence of Leveraged ETF Returns."
 - Gayed and Bilello (2016), "Leverage for the Long Run."
 - Alpaca documentation: paper trading, and margin and short selling.
+
+## Version 4: version 3 at 1.5 times the size
+
+Committed on Nov 23, 2026, before any version 3 or version 4 results. It counts as trial 9.
+
+Why: Miles asked for a higher-risk version after the version 3 research found that the one large return lever left is risk, which needs leverage. Return above T-bills equals the Sharpe ratio times volatility, so 1.5 times the risk at the same Sharpe ratio gives about 1.5 times the excess return, minus the cost of the borrowing.
+
+Why 1.5: the Kelly rule gives the leverage that maximizes long-run growth as the Sharpe ratio divided by volatility. With version 2's figures (Sharpe 0.45, volatility 8.1%) and the Sharpe ratio cut in half for backtest optimism (Harvey and Liu 2015), that is 0.225 / 0.081, about 2.8 times. Estimation error makes full Kelly risky, so practitioners bet a fraction of it (MacLean, Thorp and Ziemba 2010). Half of 2.8 is 1.4, rounded to 1.5.
+
+```
+Kelly leverage = (expected return - T-bill rate) / variance = Sharpe / volatility
+```
+
+What changes:
+
+1. Exposures: version 3's rule with every limit times 1.5 (a 15% volatility target, 37.5% per ETF, 150% total exposure). Every exposure is exactly 1.5 times version 3's.
+2. Holdings: while total exposure is at most 100%, the bot holds 1x ETFs. Above 100%, it moves the same share of each ETF that has a 2x fund into that fund, just enough that holdings add up to 100% of equity. If moving all of them is not enough, every exposure is scaled down by one factor until it fits. The account never borrows; the borrowing happens inside the 2x funds.
+3. TIP, DBC, UUP, FXY, DBB and DBA have no 2x fund here and are always held as 1x ETFs.
+4. A 2x fund trades on its 1x ETF's trend score, under the same trading rule, trade days and 5 bp cost.
+
+| 1x ETF | 2x fund | Measured extra cost a year | 2x fund's first day | Average dollars traded a day (60 days to Nov 20, 2026) |
+| --- | --- | --- | --- | --- |
+| SPY | SSO | 1.55% | Jun 21, 2006 | $290M |
+| EFA | EFO | 2.03% | Jun 4, 2009 | $0.4M |
+| EEM | EET | 1.65% | Jun 4, 2009 | $0.8M |
+| VNQ | URE | 2.60% | Feb 2, 2007 | $0.1M |
+| IEF | UST | 0.64% | Feb 2, 2010 | $0.5M |
+| TLT | UBT | 0.62% | Jan 21, 2010 | $1.4M |
+| GLD | UGL | 2.51% | Dec 3, 2008 | $132M |
+
+"Measured extra cost" is how far each fund fell short of "2 times its 1x ETF's daily return, minus T-bill interest on the borrowed half", averaged over its full history (`tools/two_x_costs.py`). It covers the fund's fee, its borrowing spread and tracking slippage.
+
+Backtest prices for the 2x funds are simulated for every date, including years before the real funds existed: each day the fund moves twice its 1x ETF's move, minus that day's T-bill rate and its measured cost, both divided by 252. Its open moves twice the 1x ETF's overnight move. Checked against the real funds over their histories, simulated growth matched real growth to within 0.01 points a year, with daily correlations of 0.97 to 0.997. EFO is the exception at 0.84, because it trades about $0.4M a day and its prices are often stale.
+
+```
+r_2x(t) = 2 * r_1x(t) - (tbill(t-1) + cost) / 252
+```
+
+Benchmark: version 4's B1 holds the same 13 ETFs at all times, at 1.5 times through the same 2x funds. Pass bars: the same three, against that B1. The deflated Sharpe ratio counts all nine trials. Version 3's is reported over eight trials, as its section says, and over nine.
+
+Expectation, written before the run: leverage does not raise the Sharpe ratio, and the 2x funds' costs lower it. Expect a Sharpe ratio 0.02 to 0.10 below version 3's, volatility 1.3 to 1.5 times version 3's, a return above T-bills 1.3 to 1.5 times version 3's minus about 0.5 to 1 point a year of fund costs, and a maximum drawdown about 1.5 times version 3's. The deflated Sharpe bar may fail: a lower Sharpe ratio across more trials is harder to tell apart from luck.
+
+Live trading: five of the seven 2x funds trade under $1.5M a day, so real orders would pay wider spreads than the 5 bp assumed; a $100,000 paper account would not notice. The funds reset to 2x every day, which the simulated prices already include.
+
+Decision rule, set now: if version 4 fails any bar, it is dropped. If it passes, Miles picks among the versions that passed, and the write-up reports all of them. Any further version counts as trial 10.
+
+Sources for version 4:
+
+- MacLean, Thorp and Ziemba (2010), "Long-term capital growth: the good and bad properties of the Kelly and fractional Kelly capital growth criteria," Quantitative Finance 10(7).
+- Harvey and Liu (2015), "Backtesting," Journal of Portfolio Management.
+- Gayed and Bilello (2016), "Leverage for the Long Run."
+- Fund prices: Yahoo Finance through `yfinance`, to Nov 20, 2026.

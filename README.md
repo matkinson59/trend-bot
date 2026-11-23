@@ -29,7 +29,7 @@ Both versions cleared the three bars set in the spec: a higher Sharpe ratio than
 
 Full results: [version 1](results/v1/summary.md), [version 2](results/v2/summary.md).
 
-Version 3 is written into the spec and the code but has not been run yet. It keeps version 2's sizing and adds four ETFs (UUP for the US dollar, FXY for the yen, DBB for industrial metals and DBA for agriculture), based on a review of trend-following research. The reasons, the studies, and the ideas it leaves out are in [SPEC.md](SPEC.md#version-3-13-etfs).
+Version 3 is written into the spec and the code but has not been run yet. It keeps version 2's sizing and adds four ETFs (UUP for the US dollar, FXY for the yen, DBB for industrial metals and DBA for agriculture), based on a review of trend-following research. The reasons, the studies, and the ideas it leaves out are in [SPEC.md](SPEC.md#version-3-13-etfs). Version 4 is version 3 at 1.5 times the size, with exposure above 100% held through 2x funds; it is also in the spec and not yet run.
 
 ![Equity curves](results/v2/equity.png)
 
@@ -51,6 +51,7 @@ The full rules are in [SPEC.md](SPEC.md).
 | `backtest.py` | Runs a spec version with its benchmarks and variants over 2007 to 2026 (`python backtest.py 2`) and writes `results/v1/` or `results/v2/` |
 | `results/` | Summary, daily equity, every trade, every position from entry to exit, and the chart |
 | `tests/` | Fail if any rule uses future prices, if the portfolio shorts or borrows, if the backtest's dollars don't reconcile, or if version 3 holds an ETF before it has a year of prices |
+| `tools/two_x_costs.py` | Measures what each 2x fund costs per year beyond twice its 1x ETF (used by version 4) |
 | `trials.csv` | One row per backtest run, used for the deflated Sharpe ratio |
 
 ## Data
