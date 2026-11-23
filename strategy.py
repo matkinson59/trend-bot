@@ -24,8 +24,7 @@ TICKERS = ["SPY", "EFA", "EEM", "VNQ", "IEF", "TLT", "TIP", "GLD", "DBC"]
 # has a full year of prices.
 TICKERS_V3 = TICKERS + ["UUP", "FXY", "DBB", "DBA"]
 # Locked for live trading on Nov 23, 2026 (SPEC.md, "Locked: version 2").
-LIVE_VERSION = 2                 # trades the account
-SHADOW_VERSION = 1               # logged alongside, never traded
+LIVE_VERSION = 2                 # the only version the live bot runs
 CASH_ETF = "BOXX"                # live bot only: holds idle cash
 # Live bot only: signals and sizing still come from the ETFs on the left;
 # the account holds the cheaper fund on the right, which tracks the same assets.

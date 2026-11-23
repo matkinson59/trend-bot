@@ -342,7 +342,7 @@ Sources for version 4:
 
 ## Locked: version 2
 
-Locked on Nov 23, 2026. Version 2 trades the live paper account, and the daily log also records what version 1 would hold, without trading it. No rule changes until the live run ends on Mar 12, 2027; any later version counts as trial 10.
+Locked on Nov 23, 2026. Version 2 trades the live paper account and is the only version the live bot runs or logs. No rule changes until the live run ends on Mar 12, 2027; any later version counts as trial 10.
 
 Counting all nine trials, version 2's deflated Sharpe ratio is 0.932, just under the 0.95 bar. It passed when it was tested (0.952 over seven trials) and slipped as later trials were added. The write-up reports both numbers.
 
