@@ -13,6 +13,8 @@ Each step adds one live detail so its effect can be seen on its own:
   C  + idle cash in BOXX (T-bill rate minus its 0.19% fee, 5 bp per trade),
      and a 0.5% cash buffer that earns nothing, as on Alpaca paper
   D  + every buy sized at its 1% limit price (the live bot as it stands)
+  E  D with BOXX trades charged 1 bp instead of 5 bp (a sensitivity check:
+     BOXX's quoted spread is about 1 cent on a $117 price)
 
 Fills are at the open, like the regular backtest; the live bot trades at
 10:17 a.m., which daily prices cannot show. Dividends are in the adjusted
@@ -72,7 +74,7 @@ def settings(**values):
 
 
 def run_live(targets, scores, opens, closes, boxx_o, boxx_c, trade_days, start,
-             cost_bps=bt.COST_BPS, boxx_cost=True):
+             cost_bps=bt.COST_BPS, boxx_cost_bps=bt.COST_BPS):
     """Weekly: plan with bot.plan_trades, trade with bot.execute at the open.
     Daily: value everything at the close. Returns daily equity and turnover."""
     idx = closes.loc[start:].index
@@ -102,8 +104,7 @@ def run_live(targets, scores, opens, closes, boxx_o, boxx_c, trade_days, start,
                                           bot.week_id(d.date()), timeout=0)
                 for o in finished:
                     value = float(o.get("filled_qty") or 0) * float(o.get("filled_avg_price") or 0)
-                    if o["symbol"] != s.CASH_ETF or boxx_cost:
-                        broker.cash -= value * cost_bps / 1e4
+                    broker.cash -= value * (boxx_cost_bps if o["symbol"] == s.CASH_ETF else cost_bps) / 1e4
                     traded_total += value
             for t in chosen:
                 last_scores[t] = float(sc[t])
@@ -144,18 +145,20 @@ def main():
     no_live = dict(CASH_BUFFER=0.0, MIN_BOXX_ORDER=0.0, **at_price)
     steps = [
         ("A", "Engine check: original ETFs, cash at the T-bill rate, no buffer or limit",
-         (opens, closes, *cash_like_tbill), no_live, False),
+         (opens, closes, *cash_like_tbill), no_live, 0.0),
         ("B", "+ the cheaper funds the account holds",
-         (h_open, h_close, *cash_like_tbill), no_live, False),
+         (h_open, h_close, *cash_like_tbill), no_live, 0.0),
         ("C", "+ idle cash in BOXX (0.19% fee, 5 bp a trade) and a 0.5% buffer earning nothing",
-         (h_open, h_close, *boxx), at_price, True),
+         (h_open, h_close, *boxx), at_price, bt.COST_BPS),
         ("D", "+ buys sized at the 1% limit price (the live bot)",
-         (h_open, h_close, *boxx), {}, True),
+         (h_open, h_close, *boxx), {}, bt.COST_BPS),
+        ("E", "D, with BOXX trades at 1 bp (its quoted spread is about 1 cent on $117) instead of 5 bp",
+         (h_open, h_close, *boxx), {}, 1.0),
     ]
     results = {}
-    for key, label, (o, c, bo, bc), overrides, boxx_cost in steps:
+    for key, label, (o, c, bo, bc), overrides, boxx_bps in steps:
         with settings(**overrides):
-            eq, traded = run_live(targets, scores, o, c, bo, bc, weekly, start, boxx_cost=boxx_cost)
+            eq, traded = run_live(targets, scores, o, c, bo, bc, weekly, start, boxx_cost_bps=boxx_bps)
         results[key] = (label, eq, stats(eq, tbill), traded)
         print(key, {k: round(v, 4) for k, v in results[key][2].items()})
 
