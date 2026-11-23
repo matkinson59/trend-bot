@@ -395,3 +395,34 @@ These details settle how the version 1 order and safety rules run in code. None 
 | PDBC in place of DBC | Lower fee, but it trailed DBC by 0.15% a year over its history. |
 
 Sources for this section: fund expense ratios from the issuers' pages and fund comparisons as of 2026; Alpaca documentation on paper trading, fractional trading and order types; Cboe, "Five Best Practices for Trading ETFs"; Hoffstein, Faber and Braun (2020), "Rebalance Timing Luck: The Dumb (Timing) Luck of Smart Beta"; Koijen, Moskowitz, Pedersen and Vrugt (2018), "Carry," Journal of Financial Economics 127(2). Return gaps and correlations computed from Yahoo Finance prices to Nov 20, 2026.
+
+## Version 5: weak scores keep positions small
+
+Committed on Nov 23, 2026, before any version 5 results. It counts as trial 10.
+
+Why: Miles asked how trend strategies limit damage in markets like the one in November 2026, when most trend scores fell to 0.25 or 0. Version 2 scales the weighted mix to 10% volatility. When every score is low, the mix is small, so the scale-up is large: on Nov 20, 2026 it was 9.7 times, which put the bot 100% invested on five ETFs that passed only one of four trend tests. Standard time-series momentum sizes each position as its signal times a volatility-based size (Moskowitz, Ooi and Pedersen 2012), so a weak signal stays a small position. Research on turning points finds that when a 12-month trend is up but the 1-month trend is down (a "Correction"), average returns fall and volatility rises, and blends of fast and slow signals did best by holding less in those states (Goulding, Harvey and Mazzoleni 2023). The four-lookback score already blends fast and slow signals; version 2's scale-up undoes what the score says.
+
+What changes from version 2 (one change only):
+
+1. The 10% volatility scale is worked out for the mix with every ETF at 1/9, as if every trend were fully on, using the same 126-day covariance.
+2. Each ETF's weight is its trend score times 1/9 times that scale. The 25% cap per ETF and the 100% limit on the total stay.
+3. Signals, lookbacks, trading rule, trade days, costs and benchmarks are unchanged.
+
+```
+k(t)   = 10% / volatility of the all-nine mix at 1/9 each (126-day covariance)
+w_i(t) = score_i(t) x (1/9) x k(t), capped at 25%; if the total is above 100%, scale down to 100%
+```
+
+When every score is 1, version 5 holds exactly what version 2 holds. When scores are low, it holds less: on Nov 20, 2026 it would hold 3.1% in each of SPY, EFA, VNQ, IEF and DBC (15.3% in total) instead of 20% each.
+
+Benchmark and bars: the same B1 and the same three bars as version 2. The deflated Sharpe ratio counts all ten trials.
+
+Expectation, written before the run: a smaller maximum drawdown than version 2's -15.5%, somewhere between -7% and -12%; an annual return between version 1's 3.8% and version 2's 5.0%; a Sharpe ratio within 0.05 of version 2's 0.45; and a lower average share invested than version 2's 89%. The deflated Sharpe bar will probably fail, as version 2's now does over nine trials.
+
+Decision rule, set now: version 5 replaces version 2 for the live run starting Nov 30, 2026 only if it has both a higher Sharpe ratio and a smaller maximum drawdown than version 2 in this backtest. Otherwise version 2 stays locked and version 5 is reported as a tested alternative. Whichever goes live, the write-up reports both.
+
+Sources for version 5:
+
+- Moskowitz, Ooi and Pedersen (2012), "Time Series Momentum," Journal of Financial Economics 104(2).
+- Goulding, Harvey and Mazzoleni (2023), "Momentum Turning Points," Journal of Financial Economics 149(3).
+- Harvey, Hoyle, Korgaonkar, Rattray, Sargaison and Van Hemert (2018), "The Impact of Volatility Targeting," Journal of Portfolio Management 45(1).
