@@ -19,6 +19,11 @@ import yfinance as yf
 # Settings from the spec
 # ---------------------------------------------------------------------------
 TICKERS = ["SPY", "EFA", "EEM", "VNQ", "IEF", "TLT", "TIP", "GLD", "DBC"]
+# Spec version 3 adds the US dollar, the Japanese yen, industrial metals and
+# agriculture. These four started trading in 2007, so each one joins once it
+# has a full year of prices.
+TICKERS_V3 = TICKERS + ["UUP", "FXY", "DBB", "DBA"]
+CASH_ETF = "BOXX"                # live bot only: holds idle cash (see SPEC.md, version 3)
 TBILL_TICKER = "^IRX"            # 13-week T-bill yield in percent (4.12 means 4.12%)
 LOOKBACKS = (21, 63, 126, 252)   # trading days: roughly 1, 3, 6 and 12 months
 VOL_WINDOW = 126                 # days of returns used to estimate portfolio volatility
@@ -55,18 +60,23 @@ def load_prices(start="2006-01-01", end=None, tickers=TICKERS):
     return prices.dropna()
 
 
-def load_bars(start="2006-01-01", end=None, tickers=TICKERS):
+def load_bars(start="2006-01-01", end=None, tickers=TICKERS, require=None):
     """Adjusted daily opens and closes for the ETFs, on the same dates.
 
     The backtest needs opens because it fills each trade at the open of
     the day after the signal.
+
+    Dates are kept where every ETF in `require` has a price (default: all of
+    `tickers`). Any other ETF stays blank (NaN) before its first trading day.
+    After that day, a missing price is filled with the previous one.
     """
+    require = list(tickers) if require is None else list(require)
     raw = yf.download(list(tickers), start=start, end=end,
                       auto_adjust=True, progress=False)
     opens = _drop_unfinished_days(raw["Open"][list(tickers)])
     closes = _drop_unfinished_days(raw["Close"][list(tickers)])
-    keep = opens.notna().all(axis=1) & closes.notna().all(axis=1)
-    return opens[keep], closes[keep]
+    keep = opens[require].notna().all(axis=1) & closes[require].notna().all(axis=1)
+    return opens[keep].ffill(), closes[keep].ffill()
 
 
 def load_tbill(index, start="2006-01-01", end=None):
@@ -197,6 +207,51 @@ def target_weights_v2(prices, tbill):
     w = np.where(total > 1.0, w / total, w)
     valid = scores.notna().all(axis=1).values & np.isfinite(var)
     return pd.DataFrame(w, index=prices.index, columns=prices.columns)[valid]
+
+
+def target_weights_v3(prices, tbill, scores=None):
+    """Spec version 3: the version 2 sizing rule over a universe whose ETFs
+    started trading on different dates.
+
+    An ETF takes part once it has a trend score, which needs 252 days of
+    prices. Before that its weight is 0. On each date, using only the ETFs
+    taking part:
+      1. each ETF starts at its trend score (equal base weights; the 1/N
+         factor cancels out in step 3)
+      2. estimate the volatility of that mix from the last 126 days
+      3. scale every weight by one factor so the mix is at 10%, up or down
+      4. cap each ETF at 25%; if the total is above 100%, scale down to 100%
+      5. if every score is 0, hold all cash
+    With every ETF present from the start, this gives the same weights as
+    target_weights_v2.
+
+    `scores` can be passed in (the always-invested benchmark uses 1 for
+    every ETF taking part); by default they are the trend scores.
+    """
+    if scores is None:
+        scores = trend_scores(prices, tbill)
+    returns = prices.pct_change().values
+    S = scores.values
+    weights = np.full(S.shape, np.nan)
+    for t in range(VOL_WINDOW, len(S)):
+        active = ~np.isnan(S[t])
+        if not active.any():
+            continue
+        window = returns[t - VOL_WINDOW + 1: t + 1][:, active]
+        if np.isnan(window).any():
+            continue
+        raw = S[t, active]
+        w = np.zeros(S.shape[1])
+        if raw.sum() > 0:
+            cov = np.cov(window, rowvar=False, ddof=1) * TRADING_DAYS
+            mix_vol = np.sqrt(raw @ cov @ raw)
+            w_active = np.minimum(raw * TARGET_VOL / mix_vol, MAX_WEIGHT)
+            if w_active.sum() > 1.0:
+                w_active = w_active / w_active.sum()
+            w[active] = w_active
+        weights[t] = w
+    out = pd.DataFrame(weights, index=prices.index, columns=prices.columns)
+    return out.dropna(how="all")
 
 
 def latest_targets(prices, tbill):

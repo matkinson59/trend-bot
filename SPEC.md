@@ -203,3 +203,83 @@ if sum of w > 1: w(i) = w(i) / sum of w
 Pass bars: the same three as version 1. B1 is unchanged, because always-invested equal weights scaled toward 10% under a 100% cap is the version 1 benchmark. The deflated Sharpe ratio counts all seven trials.
 
 Decision rule, set now: if version 2 fails any bar, version 1 goes live. If it passes, Miles picks between the two, and the write-up reports both.
+
+## Version 3: 13 ETFs
+
+Committed on Nov 23, 2026, before any version 3 results.
+
+Why: a research review of trend-following studies, listed at the end of this section. Three findings drove the change.
+
+1. Most of trend following's risk-adjusted return comes from holding many markets whose trends are independent of each other (Moskowitz, Ooi and Pedersen 2012; Hurst, Ooi and Pedersen 2017; Babu et al. 2020). Versions 1 and 2 hold nine ETFs, and three of them are US Treasury funds that move almost together (daily correlation of IEF and TLT: 0.91, 2008 to 2026).
+2. The standard trend-following universe covers four groups: stock indices, government bonds, commodities and currencies. Versions 1 and 2 hold no currencies, and every commodity except gold sits inside one fund (DBC holds 14 commodities), so the bot can only hold or drop all of them at once.
+3. A long-only bot can't short, so when stocks fall it can only step aside. The Japanese yen has tended to rise against the dollar when US stocks fall (Ranaldo and Söderlind 2010), and the dollar index fund UUP has had a negative daily correlation with SPY (-0.20, 2008 to 2026). Trend signals on these two give the bot something that can rise in a sell-off.
+
+What changes: the universe only. Signals, the version 2 sizing rule, trade days, the trading rule, costs and safety checks stay the same.
+
+| Added ETF | What it holds | First trading day in the data |
+| --- | --- | --- |
+| UUP | Long US dollar index futures: the dollar against the euro, yen, pound, Canadian dollar, Swedish krona and Swiss franc | Mar 1, 2007 |
+| FXY | Japanese yen | Feb 13, 2007 |
+| DBB | Industrial metals futures: aluminum, zinc and copper | Jan 5, 2007 |
+| DBA | Agricultural commodity futures | Jan 5, 2007 |
+
+How they were picked: one fund for each group the nine ETFs leave out (currencies) or lump together (commodities other than gold), choosing the oldest liquid fund in each case. Their start dates, volatility and correlations with the original nine were checked; their returns were not. Considered and left out: FXE (the euro moves as a near mirror of UUP, correlation -0.95), IWM (US small caps, 0.89 correlated with SPY), SLV (silver, 0.79 correlated with GLD) and LQD (corporate bonds, not part of the standard trend universe).
+
+Late starters: an ETF takes part once it has 252 days of prices, which the 12-month check needs. Until then its weight is 0 and the sizing rule runs on the ETFs that have scores. The four new funds join in early 2008, so every version still runs on the same calendar from Feb 12, 2007.
+
+```
+active = ETFs with a trend score today
+u(i) = score(i) for i in active        (equal base weights)
+w(i) = min(0.25, u(i) * 0.10 / sigma_u)
+if sum of w > 1: w(i) = w(i) / sum of w
+```
+
+With all ETFs present from the start, this gives exactly the version 2 weights. `tests/test_v3.py` checks that, along with the lookahead test, the weight limits, the one-year wait and the backtest's bookkeeping.
+
+Benchmark: version 3's B1 holds the same 13 ETFs at all times (score 1 once an ETF has a year of prices), sized by the version 3 rule. It isolates the trend signal the same way B1 does for versions 1 and 2.
+
+Pass bars: the same three, measured against version 3's B1. The deflated Sharpe ratio counts all eight trials.
+
+Expectation, written before the run: a modest change. More independent markets should raise the Sharpe ratio, but without borrowing, extra diversification also lowers how much risk the bot can take when the 100% limit is binding, which pulls return down. Best guess: a Sharpe ratio between 0.45 and 0.60 and an annual return between 4.5% and 6.5%. Version 3 is not expected to beat SPY's or the 60/40 portfolio's return over 2007 to 2026.
+
+Decision rule, set now: if version 3 fails any bar, it is dropped. If it passes, Miles picks among the versions that passed, and the write-up reports all of them. Version 3 is the last rule change at the 10% risk level under the long-or-cash rule. Any further version would change the risk level or that rule, and it would count as trial 9.
+
+### Live-trading changes in version 3
+
+These do not change the backtest. They make the paper account's results comparable with it.
+
+1. Idle cash goes into BOXX, a fund that tracks 1 to 3 month T-bills and pays no distributions, so its return builds into its price. Alpaca's paper trading does not simulate dividends, and its paper trading page says nothing about paying interest on cash, so uninvested cash would otherwise earn nothing there. The backtest already credits the T-bill rate on cash. BOXX's expense ratio is about 0.19% a year.
+2. Because paper trading leaves out dividends, the daily log adds them back from Yahoo's dividend-adjusted prices and reports the total return next to Alpaca's account value. Several of the ETFs pay distributions (the bond funds monthly, and some of the commodity and currency funds once a year).
+
+### Ideas from the research that version 3 does not use
+
+| Idea | Why not |
+| --- | --- |
+| Risk-parity weights (each ETF sized by 1/volatility) | Raises the Sharpe ratio, but without borrowing it shifts money into low-volatility bonds and lowers return (Asness, Frazzini and Pedersen 2012). Trial 6 matched this: Sharpe 0.55, return 3.8% a year. |
+| Optimized (mean-variance) weights | Estimation error outweighs the gain: none of 14 optimization models beat equal weights consistently out of sample (DeMiguel, Garlappi and Uppal 2009). |
+| Holding only the strongest-trending ETFs | Clare et al. found that adding this ranking to trend following raised returns along with volatility, without clearly better risk-adjusted results (working paper version, 2012). |
+| More volatility timing | Improves the Sharpe ratio for stocks and credit only, with little effect for bonds, currencies and commodities (Harvey et al. 2018). Volatility-managed equity strategies did not systematically beat unmanaged ones out of sample (Cederburg et al. 2020). |
+| Different lookbacks or signals | Trials 2 to 5 in this project land between Sharpe 0.38 and 0.47. Nothing points to a better signal. |
+| Bands that skip small trades | Cost research favors trading less (Novy-Marx and Velikov 2016; Garleanu and Pedersen 2013). But 79% of version 2's turnover comes from trend-score changes, which are the signal itself, and skipping them means ignoring signals. The other 21% costs about 0.1% a year at 5 bp. |
+| Borrowing on margin | Alpaca's margin documentation uses 6.50% a year in its example, and a broker comparison site lists 6.25%; the 13-week T-bill yield was 4.12% on Nov 20, 2026. Each borrowed dollar would cost about 2.1 to 2.4 points more than cash earns, while version 2 earned about 3.6 points over T-bills per dollar invested (Sharpe 0.45 at 8.1% volatility). After the usual discount for backtest optimism (Harvey and Liu 2015), that edge is gone. |
+| 2x leveraged ETFs | The strongest return lever in the research: a 2x S&P 500 held only while the index is above its 200-day average had a Sharpe ratio of 0.51, against 0.30 for buy-and-hold, over 1928 to 2015, assuming a 1% yearly cost of leverage and no switching costs (Gayed and Bilello 2016, as summarized by CXO Advisory). Borrowing inside these funds is cheaper than margin, but several the bot would need started after the test begins (2x Treasuries in 2010, 2x gold in 2008), so the full period can't be tested without simulated prices. They would also raise the risk level. Miles's decision. |
+| Inverse ETFs (for example SH, which rises when the S&P 500 falls) | Would let the bot gain from falling stocks without shorting, but they move away from the long-or-cash rule, and their daily reset makes them lose value in volatile markets (Avellaneda and Zhang 2010). Miles's decision. |
+| Adding the period's winners (for example QQQ) | Choosing assets because they did well in the test period is hindsight, and it would make the backtest meaningless. |
+
+### Sources for version 3
+
+- Moskowitz, Ooi and Pedersen (2012), "Time Series Momentum," Journal of Financial Economics 104(2).
+- Hurst, Ooi and Pedersen (2017), "A Century of Evidence on Trend-Following Investing," Journal of Portfolio Management.
+- Babu, Levine, Ooi, Pedersen and Stamelos (2020), "Trends Everywhere," Journal of Investment Management 18(1).
+- Clare, Seaton, Smith and Thomas, "The Trend Is Our Friend: Risk Parity, Momentum and Trend Following in Global Asset Allocation," University of York discussion paper 12/25 (2012); published in the Journal of Behavioral and Experimental Finance 9 (2016).
+- Harvey, Hoyle, Korgaonkar, Rattray, Sargaison and Van Hemert (2018), "The Impact of Volatility Targeting," Journal of Portfolio Management 45(1).
+- Cederburg, O'Doherty, Wang and Yan (2020), "On the Performance of Volatility-Managed Portfolios," Journal of Financial Economics 138.
+- Asness, Frazzini and Pedersen (2012), "Leverage Aversion and Risk Parity," Financial Analysts Journal 68(1).
+- DeMiguel, Garlappi and Uppal (2009), "Optimal Versus Naive Diversification: How Inefficient Is the 1/N Portfolio Strategy?" Review of Financial Studies 22(5).
+- Novy-Marx and Velikov (2016), "A Taxonomy of Anomalies and Their Trading Costs," Review of Financial Studies 29(1).
+- Garleanu and Pedersen (2013), "Dynamic Trading with Predictable Returns and Transaction Costs," Journal of Finance 68(6).
+- Harvey and Liu (2015), "Backtesting," Journal of Portfolio Management.
+- Ranaldo and Söderlind (2010), "Safe Haven Currencies," Review of Finance 14(3).
+- Avellaneda and Zhang (2010), "Path-Dependence of Leveraged ETF Returns."
+- Gayed and Bilello (2016), "Leverage for the Long Run."
+- Alpaca documentation: paper trading, and margin and short selling.

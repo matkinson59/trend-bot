@@ -29,13 +29,15 @@ Both versions cleared the three bars set in the spec: a higher Sharpe ratio than
 
 Full results: [version 1](results/v1/summary.md), [version 2](results/v2/summary.md).
 
+Version 3 is written into the spec and the code but has not been run yet. It keeps version 2's sizing and adds four ETFs (UUP for the US dollar, FXY for the yen, DBB for industrial metals and DBA for agriculture), based on a review of trend-following research. The reasons, the studies, and the ideas it leaves out are in [SPEC.md](SPEC.md#version-3-13-etfs).
+
 ![Equity curves](results/v2/equity.png)
 
 ## The rules
 
 1. The bot trades nine ETFs: SPY, EFA, EEM, VNQ, IEF, TLT, TIP, GLD and DBC. Together they cover US and foreign stocks, real estate, Treasuries, gold and commodities.
 2. For lookbacks of 21, 63, 126 and 252 trading days, it checks whether each ETF's total return beat T-bills over the same window. The trend score is the share of the four checks that pass: 0, 0.25, 0.5, 0.75 or 1.
-3. Each ETF starts at 1/9 of the portfolio. If the equal-weight mix has run above 10% yearly volatility over the last 126 days, all nine shrink by the same factor. Each weight is then multiplied by its trend score, and the rest stays in cash. Version 2 instead scales the weights up or down to 10% expected volatility, with at most 25% in any ETF and at most 100% invested.
+3. Each ETF starts at 1/9 of the portfolio. If the equal-weight mix has run above 10% yearly volatility over the last 126 days, all nine shrink by the same factor. Each weight is then multiplied by its trend score, and the rest stays in cash. Version 2 instead scales the weights up or down to 10% expected volatility, with at most 25% in any ETF and at most 100% invested. Version 3 uses the version 2 sizing on 13 ETFs; each new ETF joins once it has a year of prices.
 4. It trades once a week. An ETF trades when its trend score has changed since its last trade, or when its weight has drifted more than 2 percentage points from target.
 
 The full rules are in [SPEC.md](SPEC.md).
@@ -48,7 +50,7 @@ The full rules are in [SPEC.md](SPEC.md).
 | `strategy.py` | The trading rules, shared by the backtest and the live bot |
 | `backtest.py` | Runs a spec version with its benchmarks and variants over 2007 to 2026 (`python backtest.py 2`) and writes `results/v1/` or `results/v2/` |
 | `results/` | Summary, daily equity, every trade, every position from entry to exit, and the chart |
-| `tests/` | Fail if any rule uses future prices, if the portfolio shorts or borrows, or if the backtest's dollars don't reconcile |
+| `tests/` | Fail if any rule uses future prices, if the portfolio shorts or borrows, if the backtest's dollars don't reconcile, or if version 3 holds an ETF before it has a year of prices |
 | `trials.csv` | One row per backtest run, used for the deflated Sharpe ratio |
 
 ## Data
