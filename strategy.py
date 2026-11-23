@@ -23,7 +23,13 @@ TICKERS = ["SPY", "EFA", "EEM", "VNQ", "IEF", "TLT", "TIP", "GLD", "DBC"]
 # agriculture. These four started trading in 2007, so each one joins once it
 # has a full year of prices.
 TICKERS_V3 = TICKERS + ["UUP", "FXY", "DBB", "DBA"]
-CASH_ETF = "BOXX"                # live bot only: holds idle cash (see SPEC.md, version 3)
+# Locked for live trading on Nov 23, 2026 (SPEC.md, "Locked: version 2").
+LIVE_VERSION = 2                 # trades the account
+SHADOW_VERSION = 1               # logged alongside, never traded
+CASH_ETF = "BOXX"                # live bot only: holds idle cash
+# Live bot only: signals and sizing still come from the ETFs on the left;
+# the account holds the cheaper fund on the right, which tracks the same assets.
+LIVE_FUNDS = {"SPY": "VOO", "EFA": "IEFA", "EEM": "IEMG", "TIP": "SCHP", "GLD": "GLDM"}
 
 # Spec version 4: version 3 at 1.5 times the size. Exposure above 100% of
 # equity is held through these 2x funds (each one returns about twice its

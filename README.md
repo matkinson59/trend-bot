@@ -10,7 +10,8 @@ Built by Miles Atkinson. The rules were written down in a spec before any backte
 | --- | --- | --- |
 | Nov 23 to 29, 2026 | Trading rules and data loader | Done |
 | Nov 30 to Dec 6 | Backtest, benchmarks and validation | Done (versions 1 and 2 passed; 3 and 4 failed) |
-| Dec 7 to 13 | Live bot in dry-run mode, spec locked | Not started |
+| Nov 23 | Rules locked at version 2 | Done |
+| Dec 7 to 13 | Live bot in dry-run mode | Not started |
 | Dec 14 | Live paper trading starts | Not started |
 
 ## Backtest
@@ -26,7 +27,7 @@ Four versions were written into the spec before each was tested, from February 2
 | 60% SPY / 40% IEF | $440,824 | 7.8% | 11.0% | 0.60 | -32.5% | |
 | SPY | $686,599 | 10.3% | 19.6% | 0.52 | -55.2% | |
 
-Versions 3 and 4 failed the deflated Sharpe ratio bar (0.875 and 0.810 against 0.95). Counting all nine trials run so far, versions 1 and 2 also fall just below it (0.936 and 0.932). No version earned as much as SPY or a 60/40 portfolio.
+Versions 3 and 4 failed the deflated Sharpe ratio bar (0.875 and 0.810 against 0.95). Counting all nine trials run so far, versions 1 and 2 also fall just below it (0.936 and 0.932). No version earned as much as SPY or a 60/40 portfolio. Version 2 is locked for the live paper run, with version 1 logged alongside it; the live plan (cheaper equivalent funds, idle cash in a T-bill fund, opening-auction orders) is in [SPEC.md](SPEC.md#locked-version-2).
 
 Full results: [comparison of all versions](results/comparison.md), [version 1](results/v1/summary.md), [version 2](results/v2/summary.md), [version 3](results/v3/summary.md), [version 4](results/v4/summary.md).
 

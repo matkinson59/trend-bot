@@ -339,3 +339,42 @@ Sources for version 4:
 - Harvey and Liu (2015), "Backtesting," Journal of Portfolio Management.
 - Gayed and Bilello (2016), "Leverage for the Long Run."
 - Fund prices: Yahoo Finance through `yfinance`, to Nov 20, 2026.
+
+## Locked: version 2
+
+Locked on Nov 23, 2026. Version 2 trades the live paper account, and the daily log also records what version 1 would hold, without trading it. No rule changes until the live run ends on Mar 12, 2027; any later version counts as trial 10.
+
+Counting all nine trials, version 2's deflated Sharpe ratio is 0.932, just under the 0.95 bar. It passed when it was tested (0.952 over seven trials) and slipped as later trials were added. The write-up reports both numbers.
+
+### Live implementation
+
+None of these change the rules or the backtest. Each makes the paper account's return higher or closer to the backtest.
+
+1. Signals and sizing come from the nine original ETFs' prices, exactly as in the backtest.
+2. For five of them, the account holds a cheaper fund that tracks the same assets. Over their shared history, each beat the original by roughly its fee difference.
+3. Idle cash goes into BOXX, a T-bill fund that pays no distributions, so its return shows in its price. Alpaca's paper trading does not credit dividends and says nothing about interest on cash.
+4. The daily log adds dividends back from Yahoo's adjusted prices, since paper trading leaves them out.
+5. Orders go in as opening-auction orders in whole shares. The backtest fills at the official open, which is the auction price. ETF spreads are usually widest in the first 15 to 20 minutes of trading, and Alpaca allows fractional shares only on day orders.
+
+| Signal ETF | Fund held | Expense ratio (signal ETF / fund held) | Index | Return gap per year, shared history | Weekly correlation |
+| --- | --- | --- | --- | --- | --- |
+| SPY | VOO | 0.0945% / 0.03% | S&P 500 for both | +0.06% (since Sep 2010) | 1.000 |
+| EFA | IEFA | 0.32% / 0.07% | MSCI EAFE; IEFA adds small caps | +0.24% (since Oct 2012) | 0.998 |
+| EEM | IEMG | 0.72% / 0.09% | MSCI Emerging Markets; IEMG adds small caps | +0.63% (since Oct 2012) | 0.998 |
+| TIP | SCHP | 0.18% / 0.03% | US TIPS (ICE for TIP, Bloomberg for SCHP) | +0.07% (since Aug 2010) | 0.995 |
+| GLD | GLDM | 0.40% / 0.10% | Gold bullion for both | +0.30% (since Jun 2018) | 0.999 |
+
+DBC stays as it is: its lower-fee sibling PDBC trailed it by 0.15% a year since November 2014. VNQ, IEF and TLT already cost 0.15% or less.
+
+Expected effect, using version 2's average weights (EEM 9.2%, EFA 10.3%, GLD 10.3%, SPY 12.5%, TIP 9.6%, cash 10.3%): about 0.13 points a year from the cheaper funds, and about 0.4 points a year from BOXX at the Nov 20, 2026 T-bill rate of 4.12% less its 0.19% fee. That is about 0.5 points a year against holding the original funds with idle cash, or roughly 0.13% over the 13-week live run.
+
+### Checked and not used
+
+| Idea | Finding |
+| --- | --- |
+| Trading on a different weekday | Version 2 run with each weekday as the trade day returned 4.6% (Thursday) to 5.3% (Friday) a year; Monday, the rule, gave 5.0%. The result does not depend on a lucky day. Switching to the best day would be fitting the backtest. Splitting the account into five parts that trade on different days ("tranching") reduces this luck without raising expected return (Hoffstein, Faber and Braun 2020), and it would be a rule change. |
+| Holding the bot as 20% of a larger portfolio | 80% in 60/40 plus 20% in version 2 returned 7.3% a year against 7.8% for 60/40 alone, with a -28.0% worst drop instead of -32.5% and a Sharpe ratio of 0.61 against 0.60. In this period the bot cut drawdowns but did not raise the larger portfolio's return. |
+| Adding a carry signal | Carry predicts returns in stocks, bonds, commodities and currencies and is different information from trend (Koijen, Moskowitz, Pedersen and Vrugt 2018). It is the best-supported next signal, but it would be a new trial and needs yield data the backtest does not have. Possible future work after the live run. |
+| PDBC in place of DBC | Lower fee, but it trailed DBC by 0.15% a year over its history. |
+
+Sources for this section: fund expense ratios from the issuers' pages and fund comparisons as of 2026; Alpaca documentation on paper trading, fractional trading and order types; Cboe, "Five Best Practices for Trading ETFs"; Hoffstein, Faber and Braun (2020), "Rebalance Timing Luck: The Dumb (Timing) Luck of Smart Beta"; Koijen, Moskowitz, Pedersen and Vrugt (2018), "Carry," Journal of Financial Economics 127(2). Return gaps and correlations computed from Yahoo Finance prices to Nov 20, 2026.
