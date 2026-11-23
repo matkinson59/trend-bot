@@ -18,9 +18,19 @@ def test_no_lookahead():
     assert mismatches == [], f"rules used future data on {mismatches}"
 
 
+def test_no_lookahead_v2():
+    prices = strategy.load_prices()
+    tbill = strategy.load_tbill(prices.index)
+    checked, mismatches = strategy.lookahead_test(prices, tbill, n_dates=50,
+                                                  weights_fn=strategy.target_weights_v2)
+    assert mismatches == [], f"v2 rules used future data on {mismatches}"
+
+
 def test_weights_stay_in_bounds():
     prices = strategy.load_prices()
     tbill = strategy.load_tbill(prices.index)
-    weights = strategy.target_weights(prices, tbill)
-    assert (weights >= 0).all().all(), "a negative weight would be a short"
-    assert (weights.sum(axis=1) <= 1.0 + 1e-9).all(), "weights above 100% would mean borrowing"
+    for fn in (strategy.target_weights, strategy.target_weights_v2):
+        weights = fn(prices, tbill)
+        assert (weights >= 0).all().all(), "a negative weight would be a short"
+        assert (weights.sum(axis=1) <= 1.0 + 1e-9).all(), "weights above 100% would mean borrowing"
+        assert (weights <= strategy.MAX_WEIGHT + 1e-12).all().all(), "an ETF above 25%"

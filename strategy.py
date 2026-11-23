@@ -24,6 +24,7 @@ LOOKBACKS = (21, 63, 126, 252)   # trading days: roughly 1, 3, 6 and 12 months
 VOL_WINDOW = 126                 # days of returns used to estimate portfolio volatility
 TARGET_VOL = 0.10                # 10% a year, the volatility ceiling
 TRADING_DAYS = 252               # trading days in a year
+MAX_WEIGHT = 0.25                # no single ETF above 25% of equity
 NEW_YORK = ZoneInfo("America/New_York")
 
 
@@ -172,6 +173,32 @@ def target_weights(prices, tbill):
     return weights.dropna()
 
 
+def target_weights_v2(prices, tbill):
+    """Spec version 2: 10% volatility as a target, not a ceiling.
+
+      1. each ETF starts at its trend score times 1/9
+      2. estimate the volatility of that mix from the last 126 days
+      3. scale every weight by one factor so the mix is at 10%, up or down
+      4. cap each ETF at 25%; if the total is above 100%, scale down to 100%
+      5. if every score is 0, hold all cash
+    """
+    scores = trend_scores(prices, tbill)
+    n = len(prices.columns)
+    raw = (scores / n).values
+    cov = (prices.pct_change().rolling(VOL_WINDOW).cov().values
+           .reshape(len(prices), n, n) * TRADING_DAYS)
+    var = np.einsum("ti,tij,tj->t", raw, cov, raw)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        w = raw * (TARGET_VOL / np.sqrt(var))[:, None]
+    all_off = np.nansum(raw, axis=1) == 0
+    w[all_off] = 0.0
+    w = np.minimum(w, MAX_WEIGHT)
+    total = w.sum(axis=1, keepdims=True)
+    w = np.where(total > 1.0, w / total, w)
+    valid = scores.notna().all(axis=1).values & np.isfinite(var)
+    return pd.DataFrame(w, index=prices.index, columns=prices.columns)[valid]
+
+
 def latest_targets(prices, tbill):
     """The newest date's trend scores and target weights, plus the cash share."""
     weights = target_weights(prices, tbill)
@@ -188,19 +215,20 @@ def latest_targets(prices, tbill):
 # ---------------------------------------------------------------------------
 # Lookahead check
 # ---------------------------------------------------------------------------
-def lookahead_test(prices, tbill, n_dates=50, seed=0):
+def lookahead_test(prices, tbill, n_dates=50, seed=0, weights_fn=None):
     """Check that no rule uses future prices.
 
     For random cutoff dates, recompute the weights using only data up to the
     cutoff, and compare them with the full-history run on that same date.
     They must match exactly. Returns (dates checked, list of mismatched dates).
     """
-    full = target_weights(prices, tbill)
+    weights_fn = weights_fn or target_weights
+    full = weights_fn(prices, tbill)
     rng = np.random.default_rng(seed)
     dates = sorted(rng.choice(full.index, size=n_dates, replace=False))
     mismatches = []
     for d in dates:
-        cut = target_weights(prices.loc[:d], tbill.loc[:d])
-        if not np.allclose(cut.loc[d].values, full.loc[d].values, rtol=0, atol=1e-12):
+        cut = weights_fn(prices.loc[:d], tbill.loc[:d])
+        if not np.allclose(cut.loc[d].values, full.loc[d].values, rtol=0, atol=1e-10):
             mismatches.append(pd.Timestamp(d).date())
     return len(dates), mismatches

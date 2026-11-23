@@ -1,6 +1,6 @@
-# Trend Bot strategy spec, version 1
+# Trend Bot strategy spec
 
-Committed to this repository before any backtest returns were computed. Every rule in `strategy.py` and `backtest.py` comes from this file. Any later change gets a new version number and counts as a new trial in `trials.csv`.
+Version 1 was committed to this repository before any backtest returns were computed. Version 2, at the end of this file, changes position sizing only and was committed before its own backtest. Every rule in `strategy.py` and `backtest.py` comes from this file. Any later change gets a new version number and counts as a new trial in `trials.csv`.
 
 ## Summary and hypothesis
 
@@ -179,3 +179,27 @@ Each week Miles adds a dated note: what the bot did and why, and one prediction 
 | Unfinished current-day prices dropped | Stops a live signal from using a day that hasn't closed |
 | Paper-only address check, post-trade position check and failure emails | Catches a wrong account, a partial fill or a crashed run |
 | A trend-score change always trades, whatever the buffer | One score step moves a weight by 1/9 x 0.25 x k, at most 2.8% of equity and under 2% whenever k is below 0.72, so a 2-point buffer alone could skip real signal changes |
+
+## Version 2: 10% volatility as a target
+
+Committed on Nov 22, 2026, after the version 1 backtest and before any version 2 results.
+
+Why: version 1 treats 10% volatility as a ceiling, and in its backtest it ran at 5.1% volatility, about half the risk budget. Version 2 tests whether using the full 10% earns more, at the cost of bigger drops. It is one change, made to match a stated risk preference, and it counts as trial 7.
+
+What changes: position sizing only. The universe, signals, trade days, trading rule, costs and safety checks stay as in version 1.
+
+1. Start each ETF at its trend score times 1/9.
+2. Estimate the volatility of that trend-weighted mix from the last 126 days of returns.
+3. Scale all weights by one factor so the mix's expected volatility equals 10% a year. The factor can be above or below 1.
+4. Cap each ETF at 25% of equity. If the total is then above 100%, scale every weight down so the total is 100%.
+5. If every score is 0, hold all cash.
+
+```
+u(i) = score(i) / 9
+w(i) = min(0.25, u(i) * 0.10 / sigma_u)
+if sum of w > 1: w(i) = w(i) / sum of w
+```
+
+Pass bars: the same three as version 1. B1 is unchanged, because always-invested equal weights scaled toward 10% under a 100% cap is the version 1 benchmark. The deflated Sharpe ratio counts all seven trials.
+
+Decision rule, set now: if version 2 fails any bar, version 1 goes live. If it passes, Miles picks between the two, and the write-up reports both.
