@@ -99,12 +99,14 @@ class AlpacaBroker:
             return []
         return [(a.get("symbol"), pd.Timestamp(a.get("date") or a.get("transaction_time")).date()) for a in acts or []]
 
-    def daily_closes(self, symbols, start):
-        """Dividend- and split-adjusted daily closes from Alpaca (fallback data source)."""
+    def daily_closes(self, symbols, start, end):
+        """Dividend- and split-adjusted daily closes from Alpaca (fallback data source).
+        `end` should be today's date: the free data plan refuses full-market (SIP)
+        data from the last 15 minutes, and the bot only uses finished days."""
         out, token = {}, None
         while True:
             params = {"symbols": ",".join(symbols), "timeframe": "1Day", "start": str(start),
-                      "adjustment": "all", "feed": "sip", "limit": 10000}
+                      "end": str(end), "adjustment": "all", "feed": "sip", "limit": 10000}
             if token:
                 params["page_token"] = token
             page = self._request("GET", f"{DATA_URL}/v2/stocks/bars", params=params)

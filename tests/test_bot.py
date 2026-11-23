@@ -204,3 +204,25 @@ def test_next_week_rebalances_end_to_end(tmp_path):
     targets = s.target_weights_v2(week2[0], week2[1]).iloc[-1]
     for t in s.TICKERS:
         assert abs(row[f"actual_{t}"] - targets[t]) < 0.006
+
+
+def test_crash_is_written_to_the_log(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["bot.py"])
+    monkeypatch.delenv("ALPACA_API_KEY_ID", raising=False)
+    monkeypatch.delenv("ALPACA_API_SECRET_KEY", raising=False)
+    with pytest.raises(ValueError):
+        bot.main()
+    daily = pd.read_csv(tmp_path / "log" / "daily.csv")
+    assert daily["status"].iloc[-1].startswith("error: ValueError: Alpaca keys are missing")
+    assert (tmp_path / "log" / "errors.csv").exists()
+
+
+def test_crash_keeps_a_row_already_written_today(tmp_path):
+    data = make_data()
+    broker = SimBroker(100_000, FUND_PRICES, trading_days(data, [date(2026, 12, 14)]))
+    go(broker, tmp_path, "2026-12-14", data)
+    bot.record_crash(RuntimeError("boom"), True, log_dir=tmp_path, now=at("2026-12-14"))
+    daily = pd.read_csv(tmp_path / "daily.csv")
+    assert len(daily) == 1 and daily["status"].iloc[0].startswith("traded")
+    assert "boom" in pd.read_csv(tmp_path / "errors.csv")["error"].iloc[0]

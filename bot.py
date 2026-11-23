@@ -60,7 +60,7 @@ def load_signal_data(broker, today):
             raise ValueError("empty or incomplete Yahoo data")
         return closes, tbill, "yahoo"
     except Exception as yahoo_error:  # noqa: BLE001
-        closes = broker.daily_closes(s.TICKERS, start)
+        closes = broker.daily_closes(s.TICKERS, start, end=today)
         closes = closes[closes.index.date < today].dropna()
         tbill = fred_tbill(closes.index, start)
         return closes, tbill, f"alpaca+fred (Yahoo failed: {str(yahoo_error)[:80]})"
@@ -108,6 +108,7 @@ class LogBook:
     DAILY = "daily.csv"
     ORDERS = "orders.csv"
     INCOME = "income.csv"
+    ERRORS = "errors.csv"
     STATE = "state.json"
 
     def __init__(self, folder):
@@ -477,6 +478,19 @@ def simulate(log_dir="sim_log"):
     return row, broker
 
 
+def record_crash(error, trading_enabled, log_dir="log", now=None):
+    """Write a run that crashed into the log, so the failure shows in the repository.
+    A row already written today (say, by an earlier run that traded) is kept."""
+    now = pd.Timestamp(now or pd.Timestamp.now(tz=NY)).tz_convert(NY)
+    day = str(now.date())
+    message = f"{type(error).__name__}: {str(error)[:300]}"
+    book = LogBook(log_dir)
+    book.append(LogBook.ERRORS, [{"date": day, "run_time": now.strftime("%H:%M"), "error": message}])
+    if book.daily.empty or day not in set(book.daily["date"]):
+        book.write_day({"date": day, "run_time": now.strftime("%H:%M"),
+                        "trading_enabled": trading_enabled, "status": "error: " + message})
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--simulate", action="store_true")
@@ -491,8 +505,12 @@ def main():
         return 0
 
     enabled = os.environ.get("TRADING_ENABLED", "false").strip().lower() == "true"
-    broker = AlpacaBroker(os.environ.get("ALPACA_API_KEY_ID"), os.environ.get("ALPACA_API_SECRET_KEY"))
-    row = run(broker, trading_enabled=enabled)
+    try:
+        broker = AlpacaBroker(os.environ.get("ALPACA_API_KEY_ID"), os.environ.get("ALPACA_API_SECRET_KEY"))
+        row = run(broker, trading_enabled=enabled)
+    except Exception as e:
+        record_crash(e, enabled)
+        raise                      # the full error still prints in the Actions log; exit code 1
     print(json.dumps({k: row[k] for k in ("date", "status", "equity_alpaca", "flags") if k in row}, default=str))
     return 1 if str(row.get("status", "")).startswith(("blocked", "error")) else 0
 
