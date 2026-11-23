@@ -54,6 +54,20 @@ def load_prices(start="2006-01-01", end=None, tickers=TICKERS):
     return prices.dropna()
 
 
+def load_bars(start="2006-01-01", end=None, tickers=TICKERS):
+    """Adjusted daily opens and closes for the ETFs, on the same dates.
+
+    The backtest needs opens because it fills each trade at the open of
+    the day after the signal.
+    """
+    raw = yf.download(list(tickers), start=start, end=end,
+                      auto_adjust=True, progress=False)
+    opens = _drop_unfinished_days(raw["Open"][list(tickers)])
+    closes = _drop_unfinished_days(raw["Close"][list(tickers)])
+    keep = opens.notna().all(axis=1) & closes.notna().all(axis=1)
+    return opens[keep], closes[keep]
+
+
 def load_tbill(index, start="2006-01-01", end=None):
     """13-week T-bill yield as a decimal (0.0412 means 4.12%), lined up with
     the price dates in `index`.

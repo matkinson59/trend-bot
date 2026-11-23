@@ -9,9 +9,17 @@ Built by Miles Atkinson. The rules were written down in a spec before any backte
 | Dates | Work | State |
 | --- | --- | --- |
 | Nov 23 to 29, 2026 | Trading rules and data loader | Done |
-| Nov 30 to Dec 6 | Backtest, benchmarks and validation | Not started |
+| Nov 30 to Dec 6 | Backtest, benchmarks and validation | Done (passed) |
 | Dec 7 to 13 | Live bot in dry-run mode, spec locked | Not started |
 | Dec 14 | Live paper trading starts | Not started |
+
+## Backtest
+
+From February 2007 to November 2026, after a 5 basis point cost on every trade, the bot returned 3.8% a year with 5.1% volatility and a worst drawdown of 7.2%. Holding the same nine ETFs at the same risk with no trend signal returned 4.7% a year but fell 26.8% at its worst. The bot cleared all three bars set in the spec before the test: a higher Sharpe ratio than the always-invested version (0.46 against 0.38), a smaller maximum drawdown, and a deflated Sharpe ratio of 0.955 across six trials.
+
+It earned less than the stock market (SPY returned 10.3% a year) with about a quarter of the volatility. Full results are in [results/summary.md](results/summary.md).
+
+![Equity curves](results/equity.png)
 
 ## The rules
 
@@ -28,7 +36,9 @@ The full rules are in [SPEC.md](SPEC.md).
 | --- | --- |
 | `SPEC.md` | The strategy spec, committed before any backtest results |
 | `strategy.py` | The trading rules, shared by the backtest and the live bot |
-| `tests/test_lookahead.py` | Fails if any rule uses future prices, or if weights go negative or above 100% |
+| `backtest.py` | Runs the strategy, benchmarks and variants over 2007 to 2026 and writes `results/` |
+| `results/` | Summary, daily equity, every trade, every position from entry to exit, and the chart |
+| `tests/` | Fail if any rule uses future prices, if the portfolio shorts or borrows, or if the backtest's dollars don't reconcile |
 | `trials.csv` | One row per backtest run, used for the deflated Sharpe ratio |
 
 ## Data
