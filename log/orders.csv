@@ -1,0 +1,6 @@
+date,phase,signal_etf,symbol,side,planned_dollars,status,filled_qty,filled_avg_price,open_price_today,dry_run
+2026-11-23,plan,SPY,VOO,buy,20000.0,,,,,True
+2026-11-23,plan,EFA,IEFA,buy,20000.0,,,,,True
+2026-11-23,plan,VNQ,VNQ,buy,20000.0,,,,,True
+2026-11-23,plan,IEF,IEF,buy,20000.0,,,,,True
+2026-11-23,plan,DBC,DBC,buy,20000.0,,,,,True
