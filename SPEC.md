@@ -208,7 +208,7 @@ Decision rule, set now: if version 2 fails any bar, version 1 goes live. If it p
 
 Committed on Nov 23, 2026, before any version 3 results.
 
-Why: a research review of trend-following studies, listed at the end of this section. Three findings drove the change.
+Why: a review of trend-following research (sources at the end of this section). The findings behind the change:
 
 1. Most of trend following's risk-adjusted return comes from holding many markets whose trends are independent of each other (Moskowitz, Ooi and Pedersen 2012; Hurst, Ooi and Pedersen 2017; Babu et al. 2020). Versions 1 and 2 hold nine ETFs, and three of them are US Treasury funds that move almost together (daily correlation of IEF and TLT: 0.91, 2008 to 2026).
 2. The standard trend-following universe covers four groups: stock indices, government bonds, commodities and currencies. Versions 1 and 2 hold no currencies, and every commodity except gold sits inside one fund (DBC holds 14 commodities), so the bot can only hold or drop all of them at once.
