@@ -398,7 +398,7 @@ Run on Nov 23, 2026 with `tools/as_live_backtest.py`, which drives the live bot'
 | C | + BOXX for idle cash (0.19% fee, 5 bp a trade), 0.5% buffer earning nothing | 4.99% | 0.453 | -15.7% |
 | D | + buys sized at the 1% limit price (the live bot) | 4.98% | 0.452 | -15.7% |
 
-Step A matched the regular backtest to within $11 on $259,331, which checks the engine. The cheaper funds added about 0.14 points a year, close to the 0.13 expected above. BOXX's fee and trading costs took about the same back, compared with the backtest's free T-bill interest on cash; against paper cash earning nothing, BOXX still adds about 0.4 points a year. Sizing buys at the limit price cost about 0.01 points a year. The synthetic BOXX (T-bill rate minus 0.19%) grew 4.37% a year from Dec 28, 2022 to Nov 20, 2026, while the real fund grew 4.68%, so step C is if anything conservative. Full table: `results/v2_live/summary.md`.
+Step A matched the regular backtest to within $11 on $259,331, which checks the engine. The cheaper funds added about 0.14 points a year, close to the 0.13 expected above. BOXX's fee and trading costs took about the same back, compared with the backtest's free T-bill interest on cash; against paper cash earning nothing, BOXX adds about 0.4 points a year at the Nov 20, 2026 T-bill rate of 4.12% (less when rates are low, as in most of 2009 to 2021). Sizing buys at the limit price cost about 0.01 points a year. The synthetic BOXX (T-bill rate minus 0.19%) grew 4.37% a year from Dec 28, 2022 to Nov 20, 2026, while the real fund grew 4.68%, so step C is if anything conservative. Full table: `results/v2_live/summary.md`.
 
 ### Checked and not used
 
