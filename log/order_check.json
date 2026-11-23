@@ -1,0 +1,78 @@
+{
+  "run_at": "2026-11-23T13:11:51.645416-05:00",
+  "market_open": true,
+  "prices": {
+    "BOXX": {
+      "price": 119.15,
+      "trade_time": "2026-11-23 17:37:29.854587014+00:00",
+      "age_minutes": 34.4
+    },
+    "DBC": {
+      "price": 29.21,
+      "trade_time": "2026-11-23 18:04:22.869616689+00:00",
+      "age_minutes": 7.5
+    },
+    "GLDM": {
+      "price": 72.305,
+      "trade_time": "2026-11-23 18:11:14.819133556+00:00",
+      "age_minutes": 0.6
+    },
+    "IEF": {
+      "price": 91.51,
+      "trade_time": "2026-11-23 18:11:33.282640729+00:00",
+      "age_minutes": 0.3
+    },
+    "IEFA": {
+      "price": 91.91,
+      "trade_time": "2026-11-23 18:10:41.852146896+00:00",
+      "age_minutes": 1.2
+    },
+    "IEMG": {
+      "price": 70.59,
+      "trade_time": "2026-11-23 18:11:47.058750101+00:00",
+      "age_minutes": 0.1
+    },
+    "SCHP": {
+      "price": 25.43,
+      "trade_time": "2026-11-23 18:04:19.189935586+00:00",
+      "age_minutes": 7.5
+    },
+    "TLT": {
+      "price": 81.54,
+      "trade_time": "2026-11-23 18:11:47.409049808+00:00",
+      "age_minutes": 0.1
+    },
+    "VNQ": {
+      "price": 93.43,
+      "trade_time": "2026-11-23 18:11:43.373432082+00:00",
+      "age_minutes": 0.1
+    },
+    "VOO": {
+      "price": 664.79,
+      "trade_time": "2026-11-23 18:11:00.290750694+00:00",
+      "age_minutes": 0.9
+    }
+  },
+  "tests": [
+    {
+      "test": "fractional shares with a limit price (what the bot sends)",
+      "symbol": "VOO",
+      "limit_price": 332.39,
+      "qty": 0.01,
+      "accepted": true,
+      "status": "pending_new",
+      "status_after_cancel": "canceled",
+      "filled_qty": 0.0
+    },
+    {
+      "test": "dollar amount with a limit price (not used by the bot)",
+      "symbol": "VOO",
+      "limit_price": 332.39,
+      "notional": 5.0,
+      "accepted": true,
+      "status": "pending_new",
+      "status_after_cancel": "canceled",
+      "filled_qty": 0.0
+    }
+  ]
+}
