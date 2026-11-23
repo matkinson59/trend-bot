@@ -12,12 +12,13 @@ Built by Miles Atkinson. The rules were written down in a spec before any backte
 | Nov 30 to Dec 6 | Backtest, benchmarks and validation | Done (versions 1 and 2 passed; 3 and 4 failed) |
 | Nov 23 | Rules locked at version 2 | Done |
 | Nov 23 | Live bot built and tested on a simulated account | Done |
+| Nov 23 | Version 5 tested against version 2 | Done (version 2 stays) |
 | Dec 7 to 13 | Live bot in dry-run mode | Not started |
 | Dec 14 | Live paper trading starts | Not started |
 
 ## Backtest
 
-Four versions were written into the spec before each was tested, from February 2007 to November 2026, starting with $100,000 and paying a 5 basis point cost on every trade. Version 1 treats 10% volatility as a ceiling, version 2 as a target, version 3 adds four ETFs to version 2, and version 4 is version 3 at 1.5 times the size through 2x funds.
+Five versions were written into the spec before each was tested, from February 2007 to November 2026, starting with $100,000 and paying a 5 basis point cost on every trade. Version 1 treats 10% volatility as a ceiling, version 2 as a target, version 3 adds four ETFs to version 2, version 4 is version 3 at 1.5 times the size through 2x funds, and version 5 is version 2 with weak trend scores kept as small positions instead of being scaled back up.
 
 | Portfolio | Ending value | Annual return | Volatility | Sharpe | Max drawdown | Passed its bars |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -25,12 +26,13 @@ Four versions were written into the spec before each was tested, from February 2
 | Version 2 | $259,331 | 5.0% | 8.1% | 0.45 | -15.5% | Yes |
 | Version 3 | $215,498 | 4.0% | 7.7% | 0.35 | -15.2% | No |
 | Version 4 | $231,481 | 4.4% | 10.8% | 0.31 | -20.9% | No |
+| Version 5 | $217,931 | 4.1% | 5.9% | 0.44 | -9.5% | No |
 | 60% SPY / 40% IEF | $440,824 | 7.8% | 11.0% | 0.60 | -32.5% | |
-| SPY | $686,599 | 10.3% | 19.6% | 0.52 | -55.2% | |
+| SPY | $686,598 | 10.3% | 19.6% | 0.52 | -55.2% | |
 
-Versions 3 and 4 failed the deflated Sharpe ratio bar (0.875 and 0.810 against 0.95). Counting all nine trials run so far, versions 1 and 2 also fall just below it (0.936 and 0.932). No version earned as much as SPY or a 60/40 portfolio. Version 2 is locked for the live paper run and is the only version the bot runs; the live plan (cheaper equivalent funds, idle cash in a T-bill fund) is in [SPEC.md](SPEC.md#locked-version-2).
+Versions 3, 4 and 5 failed the deflated Sharpe ratio bar (0.875, 0.810 and 0.927 against 0.95). Counting all ten trials run so far, versions 1 and 2 also fall just below it (0.938 and 0.933). Version 5 cut the worst drop from -15.5% to -9.5% but earned less and had a slightly lower Sharpe ratio than version 2 (0.441 against 0.449), so under the rule set before its run, version 2 stays. No version earned as much as SPY or a 60/40 portfolio. Version 2 is locked for the live paper run and is the only version the bot runs; the live plan (cheaper equivalent funds, idle cash in a T-bill fund) is in [SPEC.md](SPEC.md#locked-version-2).
 
-Full results: [comparison of all versions](results/comparison.md), [version 1](results/v1/summary.md), [version 2](results/v2/summary.md), [version 3](results/v3/summary.md), [version 4](results/v4/summary.md).
+Full results: [comparison of all versions](results/comparison.md), [version 1](results/v1/summary.md), [version 2](results/v2/summary.md), [version 3](results/v3/summary.md), [version 4](results/v4/summary.md), [version 5](results/v5/summary.md).
 
 ![Growth of $100,000](results/comparison.png)
 
@@ -52,7 +54,7 @@ The full rules are in [SPEC.md](SPEC.md).
 | `bot.py` | The live bot: one run per weekday, trades on the week's first trading day, logs every day (`python bot.py --simulate` runs it against a pretend $100,000 account) |
 | `broker.py` | Talks to Alpaca's paper API and refuses any other address; also holds the pretend account the tests use |
 | `setup/trend-bot.yml` | The GitHub Actions schedule, to be copied to `.github/workflows/` |
-| `backtest.py` | Runs a spec version with its benchmarks and variants over 2007 to 2026 (`python backtest.py 2`) and writes `results/v1/` or `results/v2/` |
+| `backtest.py` | Runs a spec version with its benchmarks and variants over 2007 to 2026 (`python backtest.py 2`) and writes `results/v1/` to `results/v5/` |
 | `results/` | Summary, daily equity, every trade, every position from entry to exit, and the chart |
 | `tests/` | Fail if any rule uses future prices, if the portfolio shorts or borrows, if the backtest's dollars don't reconcile, if version 3 holds an ETF before it has a year of prices, or if the live bot ever borrows, trades twice in a week, or trades on stale data |
 | `tools/two_x_costs.py` | Measures what each 2x fund costs per year beyond twice its 1x ETF (used by version 4) |

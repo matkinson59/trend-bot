@@ -226,6 +226,33 @@ def target_weights_v2(prices, tbill):
     return pd.DataFrame(w, index=prices.index, columns=prices.columns)[valid]
 
 
+def target_weights_v5(prices, tbill):
+    """Spec version 5: weak scores keep positions small.
+
+      1. find the one factor that scales the all-nine mix (1/9 each) to 10%
+         volatility, from the last 126 days
+      2. each ETF gets its trend score times 1/9 times that factor
+      3. cap each ETF at 25%; if the total is above 100%, scale down to 100%
+    With every score at 1 this is exactly version 2. With low scores the
+    positions stay small instead of being scaled back up.
+    """
+    scores = trend_scores(prices, tbill)
+    n = len(prices.columns)
+    base = np.full(n, 1.0 / n)
+    cov = (prices.pct_change().rolling(VOL_WINDOW).cov().values
+           .reshape(len(prices), n, n) * TRADING_DAYS)
+    var = np.einsum("i,tij,j->t", base, cov, base)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        scale = TARGET_VOL / np.sqrt(var)
+    w = scores.values * base * scale[:, None]
+    w = np.minimum(w, MAX_WEIGHT)
+    total = w.sum(axis=1, keepdims=True)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        w = np.where(total > 1.0, w / total, w)
+    valid = scores.notna().all(axis=1).values & np.isfinite(var)
+    return pd.DataFrame(w, index=prices.index, columns=prices.columns)[valid]
+
+
 def target_weights_v3(prices, tbill, scores=None, leverage=1.0):
     """Spec version 3: the version 2 sizing rule over a universe whose ETFs
     started trading on different dates.

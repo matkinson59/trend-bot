@@ -342,7 +342,7 @@ Sources for version 4:
 
 ## Locked: version 2
 
-Locked on Nov 23, 2026. Version 2 trades the live paper account and is the only version the live bot runs or logs. No rule changes until the live run ends on Mar 12, 2027; any later version counts as trial 10.
+Locked on Nov 23, 2026. Version 2 trades the live paper account and is the only version the live bot runs or logs. No rule changes until the live run ends on Mar 12, 2027. Version 5 (trial 10) was tested the same day under a rule set before its run and did not replace version 2; any later version counts as trial 11.
 
 Counting all nine trials, version 2's deflated Sharpe ratio is 0.932, just under the 0.95 bar. It passed when it was tested (0.952 over seven trials) and slipped as later trials were added. The write-up reports both numbers.
 
@@ -426,3 +426,7 @@ Sources for version 5:
 - Moskowitz, Ooi and Pedersen (2012), "Time Series Momentum," Journal of Financial Economics 104(2).
 - Goulding, Harvey and Mazzoleni (2023), "Momentum Turning Points," Journal of Financial Economics 149(3).
 - Harvey, Hoyle, Korgaonkar, Rattray, Sargaison and Van Hemert (2018), "The Impact of Volatility Targeting," Journal of Portfolio Management 45(1).
+
+Result (Nov 23, 2026): failed the deflated Sharpe bar (0.927 over ten trials) and did not replace version 2. Sharpe 0.44 against B1's 0.38 and drawdown -9.5% against -26.8% passed. Against version 2: annual return 4.1% against 5.0%, volatility 5.9% against 8.1%, Sharpe ratio 0.441 against 0.449, maximum drawdown -9.5% against -15.5%, average invested 66% against 89%. Every part of the expectation above held. Version 5 had the smaller drawdown but not the higher Sharpe ratio, so under the decision rule version 2 stays locked for the live run starting Nov 30, 2026.
+
+Where version 5 differed most was slow declines: in 2022 it lost 2.8% against version 2's 8.8%, and from Oct 6 to Nov 20, 2026 it lost 3.7% against 9.2%. In the fast COVID crash (Feb 19 to Mar 23, 2020) the two were close (-7.5% and -7.9%). Over the full period, version 2 held at 73% of its size with the rest in T-bills matches version 5's volatility and returns 4.1% a year at a Sharpe ratio of 0.45 with a -11.3% worst drop, so version 5 mostly takes less risk rather than earning more per unit of risk. Counting all ten trials, version 1's deflated Sharpe ratio is 0.938 and version 2's is 0.933.
