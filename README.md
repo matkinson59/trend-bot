@@ -13,7 +13,8 @@ Built by Miles Atkinson. The rules were written down in a spec before any backte
 | Nov 23 | Rules locked at version 2 | Done |
 | Nov 23 | Live bot built and tested on a simulated account | Done |
 | Nov 23 | Versions 5 and 6 tested against version 2 | Done (version 2 stays; versions 1 and 6 run as shadows) |
-| Nov 23 to 27 | Live bot in dry-run mode, order check | In progress |
+| Nov 23 | Order check on the paper account | Done (limit orders accepted) |
+| Nov 23 to 27 | Live bot in dry-run mode | In progress |
 | Nov 30 | Live paper trading starts (version 2; versions 1 and 6 as shadows) | Not started |
 
 ## Backtest
