@@ -386,6 +386,20 @@ These details settle how the version 1 order and safety rules run in code. None 
 | Failure | A run that is blocked by a safety check or hits an error exits with code 1, so GitHub marks it failed and emails Miles. A run that crashes still writes the error to `log/errors.csv`, and to `log/daily.csv` if that day has no row yet. |
 | Files | `log/daily.csv` (one row per day), `log/orders.csv` (every order with its fill), `log/income.csv` (dividends and T-bill interest added back), `log/errors.csv` (runs that crashed), `log/order_check.json` (the one-time order check: `python bot.py --check-orders` places two VOO buy orders priced 50% below the market, so they cannot fill, then cancels them), `log/state.json` (last scores, week evaluated, peak equity). |
 
+### Version 2 as the live bot trades it
+
+Run on Nov 23, 2026 with `tools/as_live_backtest.py`, which drives the live bot's own planning and order code against an in-memory broker from Feb 2007 to Nov 2026. It changes no rule and nothing was chosen from it, so it is not a trial. Fills are at the open; the live bot's 10:17 a.m. fills cannot be shown with daily prices.
+
+| Step | What is added | Annual return | Sharpe | Max drawdown |
+| --- | --- | --- | --- | --- |
+| | Regular backtest | 5.0% (4.99%) | 0.449 | -15.5% |
+| A | Same engine, original ETFs, cash at the T-bill rate | 4.99% | 0.449 | -15.5% |
+| B | + the cheaper funds | 5.13% | 0.468 | -15.5% |
+| C | + BOXX for idle cash (0.19% fee, 5 bp a trade), 0.5% buffer earning nothing | 4.99% | 0.453 | -15.7% |
+| D | + buys sized at the 1% limit price (the live bot) | 4.98% | 0.452 | -15.7% |
+
+Step A matched the regular backtest to within $11 on $259,331, which checks the engine. The cheaper funds added about 0.14 points a year, close to the 0.13 expected above. BOXX's fee and trading costs took about the same back, compared with the backtest's free T-bill interest on cash; against paper cash earning nothing, BOXX still adds about 0.4 points a year. Sizing buys at the limit price cost about 0.01 points a year. The synthetic BOXX (T-bill rate minus 0.19%) grew 4.37% a year from Dec 28, 2022 to Nov 20, 2026, while the real fund grew 4.68%, so step C is if anything conservative. Full table: `results/v2_live/summary.md`.
+
 ### Checked and not used
 
 | Idea | Finding |
