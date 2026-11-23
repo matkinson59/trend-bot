@@ -52,3 +52,13 @@ def test_all_scores_zero_means_all_cash():
     v5 = s.target_weights_v5(prices, tbill)
     zero_days = (s.trend_scores(prices, tbill).reindex(v5.index) == 0).all(axis=1)
     assert zero_days.any() and (v5[zero_days] == 0).all().all()
+
+
+def test_v6_is_v5_at_a_15_percent_target():
+    prices = prices_with([0.003] * 9)
+    tbill = pd.Series(0.01, index=prices.index)
+    prices.iloc[-21:] = prices.iloc[-22].values * np.exp(np.cumsum(np.full((21, 9), -0.004), axis=0))
+    v6 = s.target_weights_v6(prices, tbill)
+    assert np.allclose(v6, s.target_weights_v5(prices, tbill, target_vol=0.15))
+    assert (v6.sum(axis=1) <= 1 + 1e-9).all() and (v6 <= s.MAX_WEIGHT + 1e-12).all().all()
+    assert v6.iloc[-1].sum() > s.target_weights_v5(prices, tbill).iloc[-1].sum()

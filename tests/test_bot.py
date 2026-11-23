@@ -43,7 +43,8 @@ def at(day, hour=10, minute=17):
 def go(broker, tmp_path, day, data, enabled=True, dividend_fn=None):
     return bot.run(broker, enabled, log_dir=tmp_path, now=at(day), data=data,
                    dividend_fn=dividend_fn or (lambda sym: pd.Series(dtype=float)),
-                   opens_fn=lambda syms: {}, timeout=0)
+                   opens_fn=lambda syms: {}, timeout=0,
+                   shadow_fn=lambda since, today, tbill: ({"v1": 1.0, "v2": 2.0, "v6": 6.0}, None))
 
 
 def test_dry_run_sends_nothing(tmp_path):
@@ -241,3 +242,29 @@ def test_live_record_starts_at_the_first_live_run(tmp_path):
     assert state["live_since"] == state["start_date"] == "2026-12-14"
     assert live["income_total"] == 0                # no interest counted for the dry-run week
     assert abs(live["return_since_start"] + live["cost_total"] / 100_000) < 1e-9
+
+
+
+def test_shadows_follow_the_backtest_from_go_live():
+    data = make_data(end="2026-12-18")
+    closes, tbill = data[0], data[1]
+    bars = lambda start, today: (closes * 0.999, closes)          # opens a touch below closes
+    out, close_day = bot.shadow_equity("2026-12-14", date(2026, 12, 21), tbill, bars_fn=bars)
+    assert close_day == date(2026, 12, 18) and set(out) == {"v1", "v2", "v6"}
+    assert all(50_000 < v < 150_000 for v in out.values())
+    from backtest import first_day_of_week, simulate
+    weekly = first_day_of_week(closes.index)
+    expect = simulate(s.target_weights_v2(closes, tbill), s.trend_scores(closes, tbill),
+                      closes * 0.999, closes, tbill, weekly, pd.Timestamp("2026-12-14"))[0]["equity"].iloc[-1]
+    assert abs(out["v2"] - expect) < 0.01
+    before, none_yet = bot.shadow_equity("2026-12-21", date(2026, 12, 21), tbill, bars_fn=bars)
+    assert none_yet is None and set(before.values()) == {100_000.0}
+
+
+def test_shadows_are_logged_only_once_live(tmp_path):
+    data = make_data()
+    broker = SimBroker(100_000, FUND_PRICES, trading_days(data, [date(2026, 12, 14)]))
+    dry = go(broker, tmp_path, "2026-12-14", data, enabled=False)
+    assert "shadow_v2" not in dry
+    live = go(broker, tmp_path, "2026-12-14", data, enabled=True)
+    assert live["shadow_v1"] == 1.0 and live["shadow_v6"] == 6.0

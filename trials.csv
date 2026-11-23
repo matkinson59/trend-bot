@@ -9,3 +9,4 @@ trial_id,date_run,spec_version,description,settings,sharpe_excess,max_drawdown,n
 8,2026-11-23,3,Spec v3: 13 ETFs,"v2 sizing; adds UUP, FXY, DBB, DBA, each joining after 252 days of prices",0.35,-0.1516,planned in SPEC.md
 9,2026-11-23,4,Spec v4: v3 at 1.5x through 2x funds,"v3 limits x1.5 (15% vol, 37.5% per ETF, 150% exposure); 2x funds above 100%; simulated 2x prices with measured costs",0.31,-0.2094,planned in SPEC.md
 10,2026-11-23,5,Spec v5: weak scores keep positions small,"v2 limits; 10% scale set for the all-nine mix, then each weight = score x 1/9 x scale",0.441,-0.0949,planned in SPEC.md
+11,2026-11-23,6,Spec v6: v5 at a 15% volatility target,"v5 sizing with a 15% target; 25% per ETF, 100% max invested",0.459,-0.1127,planned in SPEC.md

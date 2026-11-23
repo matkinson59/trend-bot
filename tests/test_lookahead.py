@@ -29,7 +29,8 @@ def test_no_lookahead_v2():
 def test_weights_stay_in_bounds():
     prices = strategy.load_prices()
     tbill = strategy.load_tbill(prices.index)
-    for fn in (strategy.target_weights, strategy.target_weights_v2, strategy.target_weights_v5):
+    for fn in (strategy.target_weights, strategy.target_weights_v2, strategy.target_weights_v5,
+               strategy.target_weights_v6):
         weights = fn(prices, tbill)
         assert (weights >= 0).all().all(), "a negative weight would be a short"
         assert (weights.sum(axis=1) <= 1.0 + 1e-9).all(), "weights above 100% would mean borrowing"

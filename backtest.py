@@ -259,17 +259,18 @@ TRIAL_SPECS = [
     ("v3", "Spec v3: 13 ETFs", "v2 sizing; adds UUP, FXY, DBB, DBA, each joining after 252 days of prices"),
     ("v4", "Spec v4: v3 at 1.5x through 2x funds", "v3 limits x1.5 (15% vol, 37.5% per ETF, 150% exposure); 2x funds above 100%; simulated 2x prices with measured costs"),
     ("v5", "Spec v5: weak scores keep positions small", "v2 limits; 10% scale set for the all-nine mix, then each weight = score x 1/9 x scale"),
+    ("v6", "Spec v6: v5 at a 15% volatility target", "v5 sizing with a 15% target; 25% per ETF, 100% max invested"),
 ]
-TRIALS_BY_VERSION = {1: 6, 2: 7, 3: 8, 4: 9, 5: 10}
-CANDIDATE = {1: "main", 2: "v2", 3: "v3", 4: "v4", 5: "v5"}
-SPEC_OF_TRIAL = {"v2": "2", "v3": "3", "v4": "4", "v5": "5"}
+TRIALS_BY_VERSION = {1: 6, 2: 7, 3: 8, 4: 9, 5: 10, 6: 11}
+CANDIDATE = {1: "main", 2: "v2", 3: "v3", 4: "v4", 5: "v5", 6: "v6"}
+SPEC_OF_TRIAL = {"v2": "2", "v3": "3", "v4": "4", "v5": "5", "v6": "6"}
 LABEL = {"main": "Trend bot (v1)", "v2": "Trend bot (v2)", "v3": "Trend bot (v3)", "v4": "Trend bot (v4)",
-         "v5": "Trend bot (v5)",
+         "v5": "Trend bot (v5)", "v6": "Trend bot (v6)",
          "B1": "B1: same 9 ETFs, always invested", "B1_13": "B1: same 13 ETFs, always invested",
          "B1_v4": "B1: same 13 ETFs, always invested at 1.5x",
          "B2": "B2: 60% SPY / 40% IEF", "B3": "B3: SPY buy and hold"}
 COLUMN = {"main": "trend_bot_v1", "v2": "trend_bot_v2", "v3": "trend_bot_v3", "v4": "trend_bot_v4",
-          "v5": "trend_bot_v5",
+          "v5": "trend_bot_v5", "v6": "trend_bot_v6",
           "B1": "B1_always_invested", "B1_13": "B1_13_always_invested", "B1_v4": "B1_v4_always_invested",
           "B2": "B2_60_40", "B3": "B3_SPY"}
 
@@ -323,6 +324,7 @@ def main(version=1, end=None, out_root=RESULTS_DIR, trials_path="trials.csv", qu
         "v4": lambda: (s.target_weights_v4(closes13, tbill), with_two_x(s.trend_scores(closes13, tbill)),
                        *bars_v4),
         "v5": lambda: (s.target_weights_v5(closes, tbill), main_scores, *bars9),
+        "v6": lambda: (s.target_weights_v6(closes, tbill), main_scores, *bars9),
     }
     trial_inputs = {key: builders[key]() for key, _, _ in trial_specs}
     results = {key: simulate(t, sc, o, c, tbill, weekly, start)
@@ -351,7 +353,7 @@ def main(version=1, end=None, out_root=RESULTS_DIR, trials_path="trials.csv", qu
         # Version 4's control: the same 13 ETFs always held, at 1.5x through 2x funds
         bench["B1_v4"] = simulate(s.target_weights_v4(closes13, tbill, scores=ones13), with_two_x(ones13),
                                   *bars_v4, tbill, weekly, start)
-    control = {1: "B1", 2: "B1", 3: "B1_13", 4: "B1_v4", 5: "B1"}[version]
+    control = {1: "B1", 2: "B1", 3: "B1_13", 4: "B1_v4", 5: "B1", 6: "B1"}[version]
 
     # Cost sensitivity for the candidate (not trials)
     t_c, sc_c, o_c, c_c = trial_inputs[candidate]
@@ -363,7 +365,7 @@ def main(version=1, end=None, out_root=RESULTS_DIR, trials_path="trials.csv", qu
     mb = {key: metrics(bench[key][0], tbill) for key in bench}
     daily_sharpes = [m[key]["excess_daily"].mean() / m[key]["excess_daily"].std() for key, _, _ in trial_specs]
     dsr, sr0_annual = deflated_sharpe(m[candidate]["excess_daily"], daily_sharpes)
-    earlier = [key for key in ("main", "v2", "v3", "v4") if key in m and key != candidate]
+    earlier = [key for key in ("main", "v2", "v3", "v4", "v5") if key in m and key != candidate]
     dsr_earlier = {key: deflated_sharpe(m[key]["excess_daily"], daily_sharpes)[0] for key in earlier}
     ep = episode_stats(results[candidate][2])
     mc = m[candidate]
@@ -375,7 +377,7 @@ def main(version=1, end=None, out_root=RESULTS_DIR, trials_path="trials.csv", qu
     }
     passed = all(bars.values())
 
-    versions_shown = [candidate] + [key for key in (("v2", "main") if version == 5 else ("v3", "v2", "main"))
+    versions_shown = [candidate] + [key for key in ({5: ("v2", "main"), 6: ("v5", "v2", "main")}.get(version, ("v3", "v2", "main")))
                                      if key in m and key != candidate]
     bench_shown = [control] + (["B1"] if control == "B1_13" else []) + ["B2", "B3"]
     series = {**{key: results[key][0] for key in versions_shown}, **{key: bench[key][0] for key in bench_shown}}
@@ -424,7 +426,7 @@ def main(version=1, end=None, out_root=RESULTS_DIR, trials_path="trials.csv", qu
     L.append(f"| Max drawdown smaller than {short} | {pct(mc['max_drawdown'])} vs {pct(mb[control]['max_drawdown'])}: {'yes' if bars['drawdown'] else 'no'} |")
     L.append(f"| Deflated Sharpe ratio at least 0.95 | {dsr:.3f} ({len(trial_specs)} trials): {'yes' if bars['dsr'] else 'no'} |\n")
     for key, value in dsr_earlier.items():
-        name = {"main": "version 1", "v2": "version 2", "v3": "version 3", "v4": "version 4"}[key]
+        name = {"main": "version 1", "v2": "version 2", "v3": "version 3", "v4": "version 4", "v5": "version 5"}[key]
         L.append(f"Counting all {len(trial_specs)} trials, {name}'s deflated Sharpe ratio is now {value:.3f}.\n")
 
     L.append("## Full period\n")
@@ -507,19 +509,19 @@ def make_chart(equity_table, out, version):
 
 
 def compare(source=f"{RESULTS_DIR}/v4/equity.csv", out_root=RESULTS_DIR):
-    """Side-by-side table and chart of the five versions, SPY and 60/40,
-    from the equity curves the version 4 and 5 runs saved. Writes
+    """Side-by-side table and chart of the six versions, SPY and 60/40,
+    from the equity curves the version 4 and 6 runs saved. Writes
     results/comparison.md and results/comparison.png."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     cols = {"trend_bot_v1": "Version 1", "trend_bot_v2": "Version 2", "trend_bot_v3": "Version 3",
-            "trend_bot_v4": "Version 4", "trend_bot_v5": "Version 5",
+            "trend_bot_v4": "Version 4", "trend_bot_v5": "Version 5", "trend_bot_v6": "Version 6",
             "B2_60_40": "60% SPY / 40% IEF", "B3_SPY": "SPY"}
     eq = pd.read_csv(source, index_col="date", parse_dates=True)
-    v5 = pd.read_csv(f"{out_root}/v5/equity.csv", index_col="date", parse_dates=True)["trend_bot_v5"]
-    eq = eq.join(v5)[list(cols)]
+    v6 = pd.read_csv(f"{out_root}/v6/equity.csv", index_col="date", parse_dates=True)[["trend_bot_v5", "trend_bot_v6"]]
+    eq = eq.join(v6)[list(cols)]
     tbill = s.load_tbill(eq.index)
     r = eq.pct_change().dropna()
     rf = tbill.shift(1).reindex(r.index) / s.TRADING_DAYS
@@ -528,7 +530,7 @@ def compare(source=f"{RESULTS_DIR}/v4/equity.csv", out_root=RESULTS_DIR):
     yearly = year_end.pct_change()
     yearly.iloc[0] = year_end.iloc[0] / eq.iloc[0] - 1
 
-    L = ["# Comparison: versions 1 to 5, SPY and 60/40\n"]
+    L = ["# Comparison: versions 1 to 6, SPY and 60/40\n"]
     L.append(f"Each starts with ${START_VALUE:,.0f} on {eq.index[0].date()} and runs to {eq.index[-1].date()}, "
              f"after a {COST_BPS} bp cost on every trade. Sharpe ratios are measured against T-bills.\n")
     L.append("| Portfolio | Ending value | Annual return | Volatility | Sharpe | Max drawdown | Worst year | Best year |")
@@ -562,7 +564,7 @@ def compare(source=f"{RESULTS_DIR}/v4/equity.csv", out_root=RESULTS_DIR):
     top.yaxis.set_major_formatter(money)
     top.yaxis.set_minor_formatter(money)
     top.set_ylabel("Value of $100,000 (log scale)")
-    top.set_title("Trend bot versions 1 to 5 vs SPY and 60/40, after costs")
+    top.set_title("Trend bot versions 1 to 6 vs SPY and 60/40, after costs")
     top.legend(loc="upper left")
     bottom.set_ylabel("Drawdown (%)")
     fig.tight_layout()

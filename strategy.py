@@ -47,6 +47,7 @@ VOL_WINDOW = 126                 # days of returns used to estimate portfolio vo
 TARGET_VOL = 0.10                # 10% a year, the volatility ceiling
 TRADING_DAYS = 252               # trading days in a year
 MAX_WEIGHT = 0.25                # no single ETF above 25% of equity
+TARGET_VOL_V6 = 0.15             # version 6 only
 NEW_YORK = ZoneInfo("America/New_York")
 
 
@@ -226,7 +227,7 @@ def target_weights_v2(prices, tbill):
     return pd.DataFrame(w, index=prices.index, columns=prices.columns)[valid]
 
 
-def target_weights_v5(prices, tbill):
+def target_weights_v5(prices, tbill, target_vol=TARGET_VOL):
     """Spec version 5: weak scores keep positions small.
 
       1. find the one factor that scales the all-nine mix (1/9 each) to 10%
@@ -243,7 +244,7 @@ def target_weights_v5(prices, tbill):
            .reshape(len(prices), n, n) * TRADING_DAYS)
     var = np.einsum("i,tij,j->t", base, cov, base)
     with np.errstate(divide="ignore", invalid="ignore"):
-        scale = TARGET_VOL / np.sqrt(var)
+        scale = target_vol / np.sqrt(var)
     w = scores.values * base * scale[:, None]
     w = np.minimum(w, MAX_WEIGHT)
     total = w.sum(axis=1, keepdims=True)
@@ -251,6 +252,12 @@ def target_weights_v5(prices, tbill):
         w = np.where(total > 1.0, w / total, w)
     valid = scores.notna().all(axis=1).values & np.isfinite(var)
     return pd.DataFrame(w, index=prices.index, columns=prices.columns)[valid]
+
+
+def target_weights_v6(prices, tbill):
+    """Spec version 6: version 5 at a 15% volatility target. The 25% cap per
+    ETF and the 100% limit on the total stay, so it never borrows."""
+    return target_weights_v5(prices, tbill, target_vol=TARGET_VOL_V6)
 
 
 def target_weights_v3(prices, tbill, scores=None, leverage=1.0):

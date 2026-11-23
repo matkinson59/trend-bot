@@ -342,7 +342,7 @@ Sources for version 4:
 
 ## Locked: version 2
 
-Locked on Nov 23, 2026. Version 2 trades the live paper account and is the only version the live bot runs or logs. No rule changes until the live run ends on Mar 12, 2027. Version 5 (trial 10) was tested the same day under a rule set before its run and did not replace version 2; any later version counts as trial 11.
+Locked on Nov 23, 2026. Version 2 trades the live paper account and is the only version the live bot runs or logs. No rule changes until the live run ends on Mar 12, 2027. Versions 5 and 6 (trials 10 and 11) were tested the same day under rules set before their runs and did not replace version 2; version 6 runs as a shadow. Any later version counts as trial 12.
 
 Counting all nine trials, version 2's deflated Sharpe ratio is 0.932, just under the 0.95 bar. It passed when it was tested (0.952 over seven trials) and slipped as later trials were added. The write-up reports both numbers.
 
@@ -449,6 +449,8 @@ Expectation: annual return 4.3% to 5.0%, maximum drawdown between -11% and -15.5
 
 Decision rule, set now: version 6 does not replace version 2 before the live run ends on Mar 12, 2027, whatever this backtest shows. It runs as a shadow (next section) and the write-up reports it.
 
+Result (Nov 23, 2026): failed the deflated Sharpe bar (0.939 over eleven trials). Sharpe 0.46 against B1's 0.38 and drawdown -11.3% against -26.8% passed. Annual return 4.8%, volatility 7.4%, Sharpe ratio 0.459, maximum drawdown -11.3%, average invested 81%. Every part of the expectation above held. Against version 2 (5.0%, 8.1%, 0.449, -15.5%), version 6 had a slightly higher Sharpe ratio and a smaller drawdown; version 2 held at 91% of its size, which matches version 6's volatility, returns 4.7% with a -14.1% worst drop. The Sharpe ratio gap (0.010) is a tenth of what the best of eleven unskilled trials would reach by luck (about 0.11), and the 15% target was picked after version 5's result, so this is not evidence that version 6 is better. Under its decision rule, version 6 runs as a shadow and version 2 stays locked. Slow declines: 2022 -4.4% (version 2 -8.8%), Oct 6 to Nov 20, 2026 -5.8% (version 2 -9.2%); COVID crash -8.7% (version 2 -7.9%). Counting all eleven trials, version 1's deflated Sharpe ratio is 0.939, version 2's is 0.934 and version 5's is 0.928.
+
 ## Shadow versions during the live run
 
 Version 2 is the primary test: it is the only version that trades the paper account. From the first live run, the daily log also tracks three simulated portfolios that each start at $100,000 on the go-live date and follow the backtest's own rules on Yahoo prices (signals at each close, trades at the next open on the week's first trading day, a 5 bp cost, cash earning T-bills, dividends included in the prices):
@@ -459,4 +461,4 @@ Version 2 is the primary test: it is the only version that trades the paper acco
 | v2 | Version 2, simulated | Measures the gap between the paper account and the backtest's assumptions |
 | v6 | Version 6 | Version 5's sizing at a 15% target |
 
-No shadow places orders, and no shadow result can change which version trades before Mar 12, 2027. The write-up reports version 2's live result first and the shadows as secondary comparisons.
+Each day's row in `log/daily.csv` records `shadow_v1`, `shadow_v2` and `shadow_v6`, valued at the previous trading day's close (`shadow_close`). The bot re-runs the three simulations from the go-live date on every run, so a day Yahoo fails is filled in by the next run. No shadow places orders, and no shadow result can change which version trades before Mar 12, 2027. The write-up reports version 2's live result first and the shadows as secondary comparisons.

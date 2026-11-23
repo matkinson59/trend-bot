@@ -36,6 +36,7 @@ CASH_BUFFER = 0.005       # share of equity kept as cash, outside BOXX
 MIN_ORDER = 1.00          # smallest order in dollars
 MIN_BOXX_ORDER = 50.00    # smallest move into or out of BOXX
 MAX_ORDER = 0.30          # largest single ETF order, as a share of equity (BOXX exempt: it is cash)
+SHADOWS = {"v1": "target_weights", "v2": "target_weights_v2", "v6": "target_weights_v6"}
 DRAWDOWN_FLAG = 0.10
 COST_BPS = 5
 PHASE_TIMEOUT = 180       # seconds to wait for each group of orders to fill
@@ -103,6 +104,31 @@ def backtest_band():
 
 
 # ---------------------------------------------------------------- log
+
+def yahoo_bars(start, today):
+    return s.load_bars(start=str(start))
+
+
+def shadow_equity(since, today, tbill, bars_fn=yahoo_bars):
+    """Simulated equity of each shadow version, $100,000 on the go-live date,
+    run with the backtest's own simulator through the last finished close.
+    Returns ({version: equity}, date of that close)."""
+    from backtest import START_VALUE, first_day_of_week, simulate
+    start = pd.Timestamp(since)
+    opens, closes = bars_fn((start - pd.DateOffset(years=3)).date(), today)
+    keep = closes.index.date < today
+    opens, closes = opens[keep], closes[keep]
+    if closes.empty or closes.index[-1] < start:
+        return {k: START_VALUE for k in SHADOWS}, None
+    rates = tbill.reindex(closes.index.union(tbill.index)).ffill().reindex(closes.index).bfill()
+    weekly = first_day_of_week(closes.index)
+    scores = s.trend_scores(closes, rates)
+    out = {}
+    for name, fn in SHADOWS.items():
+        daily, _, _ = simulate(getattr(s, fn)(closes, rates), scores, opens, closes, rates, weekly, start)
+        out[name] = round(float(daily["equity"].iloc[-1]), 2)
+    return out, closes.index[-1].date()
+
 
 class LogBook:
     DAILY = "daily.csv"
@@ -328,7 +354,7 @@ def execute(broker, dollars, targets, positions, equity, week, timeout):
 # ---------------------------------------------------------------- one run
 
 def run(broker, trading_enabled, log_dir="log", now=None, data=None, dividend_fn=None,
-        opens_fn=None, timeout=PHASE_TIMEOUT):
+        opens_fn=None, timeout=PHASE_TIMEOUT, shadow_fn=None):
     now = pd.Timestamp(now or pd.Timestamp.now(tz=NY)).tz_convert(NY)
     today = now.date()
     week = week_id(today)
@@ -461,6 +487,15 @@ def run(broker, trading_enabled, log_dir="log", now=None, data=None, dividend_fn
     low, high = backtest_band()
     if np.isfinite(ret_60) and not (low <= ret_60 <= high):
         flags.append(f"60-day return {ret_60:.1%} is outside the backtest band ({low:.1%} to {high:.1%})")
+
+    if recording:
+        try:
+            shadows, shadow_close = (shadow_fn or shadow_equity)(st["live_since"], today, tbill)
+            row["shadow_close"] = str(shadow_close) if shadow_close else ""
+            for name, value in shadows.items():
+                row[f"shadow_{name}"] = value
+        except Exception as e:  # noqa: BLE001
+            flags.append(f"shadow versions not updated ({str(e)[:80]})")
 
     row.update(status=status, data_source=source, data_date=str(data_date),
                equity_alpaca=account["equity"], cash=account["cash"],
