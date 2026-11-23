@@ -430,3 +430,33 @@ Sources for version 5:
 Result (Nov 23, 2026): failed the deflated Sharpe bar (0.927 over ten trials) and did not replace version 2. Sharpe 0.44 against B1's 0.38 and drawdown -9.5% against -26.8% passed. Against version 2: annual return 4.1% against 5.0%, volatility 5.9% against 8.1%, Sharpe ratio 0.441 against 0.449, maximum drawdown -9.5% against -15.5%, average invested 66% against 89%. Every part of the expectation above held. Version 5 had the smaller drawdown but not the higher Sharpe ratio, so under the decision rule version 2 stays locked for the live run starting Nov 30, 2026.
 
 Where version 5 differed most was slow declines: in 2022 it lost 2.8% against version 2's 8.8%, and from Oct 6 to Nov 20, 2026 it lost 3.7% against 9.2%. In the fast COVID crash (Feb 19 to Mar 23, 2020) the two were close (-7.5% and -7.9%). Over the full period, version 2 held at 73% of its size with the rest in T-bills matches version 5's volatility and returns 4.1% a year at a Sharpe ratio of 0.45 with a -11.3% worst drop, so version 5 mostly takes less risk rather than earning more per unit of risk. Counting all ten trials, version 1's deflated Sharpe ratio is 0.938 and version 2's is 0.933.
+
+## Version 6: version 5 at a 15% volatility target
+
+Committed on Nov 23, 2026, after version 5's results and before any version 6 results. It counts as trial 11.
+
+Why: Miles asked for version 5's sizing with more risk. Version 5 cut losses in slow declines but held 66% on average and earned 4.1% a year; a higher target lets it hold more when trends are strong while still holding little when scores are low.
+
+What changes from version 5 (one change only): the volatility target is 15% instead of 10%. Each ETF's weight is its trend score times 1/9 times the factor that would put the all-nine mix at 15% volatility. The 25% cap per ETF and the 100% limit on the total stay, so the account still never borrows. When every score is 1 the 100% limit binds and version 6 holds what version 2 holds; on Nov 20, 2026 it would hold 4.6% in each of SPY, EFA, VNQ, IEF and DBC (23% in total).
+
+```
+w_i(t) = score_i(t) x (1/9) x 15% / volatility of the all-nine mix, capped at 25%; total at most 100%
+```
+
+Caution, written before the run: 15% was chosen after seeing version 5's result, which is how backtests get overfit. Version 5's result suggests its sizing mostly sets how much risk the bot takes rather than how much it earns per unit of risk, so a higher target should land between versions 5 and 2.
+
+Expectation: annual return 4.3% to 5.0%, maximum drawdown between -11% and -15.5%, Sharpe ratio 0.40 to 0.48, average invested 75% to 89%. The deflated Sharpe bar will probably fail.
+
+Decision rule, set now: version 6 does not replace version 2 before the live run ends on Mar 12, 2027, whatever this backtest shows. It runs as a shadow (next section) and the write-up reports it.
+
+## Shadow versions during the live run
+
+Version 2 is the primary test: it is the only version that trades the paper account. From the first live run, the daily log also tracks three simulated portfolios that each start at $100,000 on the go-live date and follow the backtest's own rules on Yahoo prices (signals at each close, trades at the next open on the week's first trading day, a 5 bp cost, cash earning T-bills, dividends included in the prices):
+
+| Shadow | Rule | Why |
+| --- | --- | --- |
+| v1 | Version 1 (10% volatility as a ceiling) | The original spec |
+| v2 | Version 2, simulated | Measures the gap between the paper account and the backtest's assumptions |
+| v6 | Version 6 | Version 5's sizing at a 15% target |
+
+No shadow places orders, and no shadow result can change which version trades before Mar 12, 2027. The write-up reports version 2's live result first and the shadows as secondary comparisons.
