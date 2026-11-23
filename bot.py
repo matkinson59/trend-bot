@@ -335,6 +335,14 @@ def run(broker, trading_enabled, log_dir="log", now=None, data=None, dividend_fn
     book = LogBook(log_dir)
     st = book.state
     st.setdefault("last_scores", {})
+    if trading_enabled and "live_since" not in st:
+        # The live record starts with the first run allowed to trade. Dry runs before it
+        # don't count toward returns, income or the peak.
+        for k in ("start_date", "start_equity", "peak", "interest_through", "dividends_through",
+                  "income_total", "traded_total"):
+            st.pop(k, None)
+        st["live_since"] = str(today)
+    recording = "live_since" in st
     flags, problems = [], []
     row = {"date": str(today), "run_time": now.strftime("%H:%M"), "trading_enabled": trading_enabled}
 
@@ -365,9 +373,12 @@ def run(broker, trading_enabled, log_dir="log", now=None, data=None, dividend_fn
     if unknown:
         flags.append("positions outside the bot's list: " + ", ".join(unknown))
 
-    income, income_rows, notes = add_income(book, today, positions, account["cash"], float(tbill.iloc[-1]),
-                                            days, dividend_fn or yahoo_dividends, broker.credited_dividends(prev_day))
-    book.append(LogBook.INCOME, income_rows)
+    income, notes = 0.0, []
+    if recording:
+        income, income_rows, notes = add_income(book, today, positions, account["cash"], float(tbill.iloc[-1]),
+                                                days, dividend_fn or yahoo_dividends,
+                                                broker.credited_dividends(prev_day))
+        book.append(LogBook.INCOME, income_rows)
 
     status = "no-trade day"
     traded = []
@@ -427,17 +438,24 @@ def run(broker, trading_enabled, log_dir="log", now=None, data=None, dividend_fn
     filled_dollars = sum(float(o.get("filled_qty") or 0) * float(o.get("filled_avg_price") or 0) for o in traded)
     st["income_total"] = st.get("income_total", 0.0) + income
     st["traded_total"] = st.get("traded_total", 0.0) + filled_dollars
-    st.setdefault("start_equity", account["equity"])
-    st.setdefault("start_date", str(today))
     with_income = account["equity"] + st["income_total"]
     after_costs = with_income - st["traded_total"] * COST_BPS / 1e4
-    st["peak"] = max(st.get("peak", after_costs), after_costs)
-    drawdown = after_costs / st["peak"] - 1
+    if recording:
+        st.setdefault("start_equity", account["equity"])
+        st.setdefault("start_date", str(today))
+        st["peak"] = max(st.get("peak", after_costs), after_costs)
+        start_equity, peak = st["start_equity"], st["peak"]
+    else:
+        start_equity = peak = after_costs          # dry runs before going live: nothing to measure yet
+    drawdown = after_costs / peak - 1
     if drawdown <= -DRAWDOWN_FLAG:
         flags.append(f"equity {drawdown:.1%} below its peak: review")
 
     ret_60 = np.nan
-    opened = book.daily[~book.daily["status"].astype(str).str.contains("closed|holiday")] if not book.daily.empty else book.daily
+    opened = book.daily
+    if not opened.empty:
+        opened = opened[~opened["status"].astype(str).str.contains("closed|holiday|error")
+                        & (opened["date"].astype(str) >= st.get("live_since", "9999"))]
     if len(opened) >= 60:
         ret_60 = after_costs / float(opened["equity_after_costs"].iloc[-60]) - 1
     low, high = backtest_band()
@@ -450,7 +468,7 @@ def run(broker, trading_enabled, log_dir="log", now=None, data=None, dividend_fn
                invested_weight=float(current.sum()),
                income_today=income, income_total=st["income_total"], equity_with_income=with_income,
                traded_total=st["traded_total"], cost_total=st["traded_total"] * COST_BPS / 1e4,
-               equity_after_costs=after_costs, return_since_start=after_costs / st["start_equity"] - 1,
+               equity_after_costs=after_costs, return_since_start=after_costs / start_equity - 1,
                drawdown=drawdown, return_60d=ret_60, band_low=low, band_high=high,
                flags=" | ".join(flags + notes))
     for t in s.TICKERS:

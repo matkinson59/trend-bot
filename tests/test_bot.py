@@ -226,3 +226,18 @@ def test_crash_keeps_a_row_already_written_today(tmp_path):
     daily = pd.read_csv(tmp_path / "daily.csv")
     assert len(daily) == 1 and daily["status"].iloc[0].startswith("traded")
     assert "boom" in pd.read_csv(tmp_path / "errors.csv")["error"].iloc[0]
+
+
+def test_live_record_starts_at_the_first_live_run(tmp_path):
+    week1 = make_data(end="2026-12-04")
+    week2 = make_data(end="2026-12-11")
+    days = sorted(set(trading_days(week1, [date(2026, 12, 7)]) + trading_days(week2, [date(2026, 12, 14)])))
+    broker = SimBroker(100_000, FUND_PRICES, days)
+    dry = go(broker, tmp_path, "2026-12-07", week1, enabled=False)
+    assert dry["status"].startswith("dry run") and not broker.sent
+    live = go(broker, tmp_path, "2026-12-14", week2, enabled=True)
+    state = json.load(open(tmp_path / "state.json"))
+    assert live["status"].startswith("traded")
+    assert state["live_since"] == state["start_date"] == "2026-12-14"
+    assert live["income_total"] == 0                # no interest counted for the dry-run week
+    assert abs(live["return_since_start"] + live["cost_total"] / 100_000) < 1e-9

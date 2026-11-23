@@ -381,7 +381,7 @@ These details settle how the version 1 order and safety rules run in code. None 
 | Missed trade day | If the week's first trading day is missed (an outage or a late run), the next run that week trades and the log marks it as a catch-up. |
 | Repeat runs | A second run on the same day replaces that day's log row and does not count income twice. Each order's ID is `tb-<week>-<symbol>-<side>`, and Alpaca rejects a repeated ID, so a week's orders cannot go out twice. |
 | Data | Yahoo first. If Yahoo fails, adjusted daily bars from Alpaca's market data and the 3-month T-bill rate from FRED (series DTB3). The log records which source was used. |
-| Dry run | With TRADING_ENABLED set to false, the bot logs the orders it would send and marks the week as evaluated, but keeps the old scores, so the first live run trades from scratch. |
+| Dry run | With TRADING_ENABLED set to false, the bot logs the orders it would send and marks the week as evaluated, but keeps the old scores, so the first live run trades from scratch. The live record (start date, starting equity, peak, income, costs, 60-day return) begins with the first run that has trading enabled; dry runs before it don't count. |
 | Failure | A run that is blocked by a safety check or hits an error exits with code 1, so GitHub marks it failed and emails Miles. A run that crashes still writes the error to `log/errors.csv`, and to `log/daily.csv` if that day has no row yet. |
 | Files | `log/daily.csv` (one row per day), `log/orders.csv` (every order with its fill), `log/income.csv` (dividends and T-bill interest added back), `log/errors.csv` (runs that crashed), `log/state.json` (last scores, week evaluated, peak equity). |
 
