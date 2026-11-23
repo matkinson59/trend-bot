@@ -3,3 +3,4 @@ numpy
 yfinance>=0.2.54
 matplotlib
 pytest
+requests

@@ -354,7 +354,7 @@ None of these change the rules or the backtest. Each makes the paper account's r
 2. For five of them, the account holds a cheaper fund that tracks the same assets. Over their shared history, each beat the original by roughly its fee difference.
 3. Idle cash goes into BOXX, a T-bill fund that pays no distributions, so its return shows in its price. Alpaca's paper trading does not credit dividends and says nothing about interest on cash.
 4. The daily log adds dividends back from Yahoo's adjusted prices, since paper trading leaves them out.
-5. Orders go in as opening-auction orders in whole shares. The backtest fills at the official open, which is the auction price. ETF spreads are usually widest in the first 15 to 20 minutes of trading, and Alpaca allows fractional shares only on day orders.
+5. Orders stay as version 1 set them: day market orders at 10:17 a.m., sized in dollars with fractional shares, sells first. Opening-auction orders were considered and dropped. Alpaca takes them only in whole shares and only until 9:28 a.m. ET, and a sell that has not filled yet does not free buying power, so buys placed at the same auction could borrow.
 
 | Signal ETF | Fund held | Expense ratio (signal ETF / fund held) | Index | Return gap per year, shared history | Weekly correlation |
 | --- | --- | --- | --- | --- | --- |
@@ -367,6 +367,23 @@ None of these change the rules or the backtest. Each makes the paper account's r
 DBC stays as it is: its lower-fee sibling PDBC trailed it by 0.15% a year since November 2014. VNQ, IEF and TLT already cost 0.15% or less.
 
 Expected effect, using version 2's average weights (EEM 9.2%, EFA 10.3%, GLD 10.3%, SPY 12.5%, TIP 9.6%, cash 10.3%): about 0.13 points a year from the cheaper funds, and about 0.4 points a year from BOXX at the Nov 20, 2026 T-bill rate of 4.12% less its 0.19% fee. That is about 0.5 points a year against holding the original funds with idle cash, or roughly 0.13% over the 13-week live run.
+
+### Live bot (bot.py)
+
+These details settle how the version 1 order and safety rules run in code. None changes a trading rule.
+
+| Part | How it works |
+| --- | --- |
+| Order of trades | Three steps. (1) Sells, plus enough BOXX to pay for the buys. (2) Buys, scaled down to the cash actually in the account after the sells. (3) Any cash left above the buffer goes into BOXX. Each step waits up to 3 minutes; an order still open then is cancelled and the log flags it. |
+| Cash buffer | 0.5% of equity stays as plain cash, so fills a little above the last price cannot push cash below zero. |
+| Order limits | Orders under $1 are skipped, and BOXX orders under $50. The 30%-of-equity limit applies to the nine ETFs' orders, not to BOXX, which can hold all the cash. |
+| Whole shares | If Alpaca marks a fund as not fractionable, its order rounds down to whole shares. |
+| Missed trade day | If the week's first trading day is missed (an outage or a late run), the next run that week trades and the log marks it as a catch-up. |
+| Repeat runs | A second run on the same day replaces that day's log row and does not count income twice. Each order's ID is `tb-<week>-<symbol>-<side>`, and Alpaca rejects a repeated ID, so a week's orders cannot go out twice. |
+| Data | Yahoo first. If Yahoo fails, adjusted daily bars from Alpaca's market data and the 3-month T-bill rate from FRED (series DTB3). The log records which source was used. |
+| Dry run | With TRADING_ENABLED set to false, the bot logs the orders it would send and marks the week as evaluated, but keeps the old scores, so the first live run trades from scratch. |
+| Failure | A run that is blocked by a safety check or hits an error exits with code 1, so GitHub marks it failed and emails Miles. |
+| Files | `log/daily.csv` (one row per day), `log/orders.csv` (every order with its fill), `log/income.csv` (dividends and T-bill interest added back), `log/state.json` (last scores, week evaluated, peak equity). |
 
 ### Checked and not used
 
