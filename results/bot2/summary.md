@@ -21,10 +21,10 @@ Winner under the registered rules: **B0: version 2, levered** (B5: equal mix of 
 | Portfolio | Ending value | Annual return | Volatility | Sharpe | Max drawdown | Worst year | Average exposure | Days below full leverage |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | B0: version 2, levered | $224,613 | 4.2% | 9.9% | 0.31 | -16.8% | -10.1% (2022) | 109% | 96% |
-| B2: trend-timed S&P 500 | $214,105 | 3.9% | 11.2% | 0.26 | -19.1% | -13.9% (2015) | 74% | 96% |
+| B2: trend-timed S&P 500 | $214,106 | 3.9% | 11.2% | 0.26 | -19.1% | -13.9% (2015) | 74% | 96% |
 | B3: sector momentum | $215,175 | 4.0% | 10.8% | 0.27 | -22.0% | -13.9% (2020) | 66% | 96% |
-| B4: B0 plus index reversal | $204,008 | 3.7% | 9.3% | 0.27 | -16.2% | -9.7% (2018) | 98% | 96% |
-| B5: equal mix of B0, B2 and B3 | $263,813 | 5.0% | 12.1% | 0.34 | -21.5% | -9.7% (2022) | 104% | 95% |
+| B4: B0 plus index reversal | $204,014 | 3.7% | 9.3% | 0.27 | -16.2% | -9.7% (2018) | 98% | 96% |
+| B5: equal mix of B0, B2 and B3 | $263,812 | 5.0% | 12.1% | 0.34 | -21.5% | -9.7% (2022) | 104% | 95% |
 | Version 2 (live bot, no leverage) | $259,331 | 4.9% | 8.1% | 0.44 | -15.5% | -8.8% (2022) | | |
 | SPY | $686,599 | 10.2% | 19.6% | 0.52 | -55.2% | -36.8% (2008) | | |
 

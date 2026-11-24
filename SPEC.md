@@ -559,3 +559,20 @@ Choosing leverage and deciding:
 1. An L is allowed if no more than 10% of paths fall 30% or more from their peak. Each candidate's L is the allowed one with the highest median ten-year annual return.
 2. The higher median of B6 and B7 is the candidate. It passes only if all three hold: its deflated Sharpe ratio on the full backtest at its chosen L is at least 0.95, counting all 18 trials; its median beats version 2's with no leverage and no floor on the same paths; and its full-backtest worst drop is smaller than 30%.
 3. If it does not pass, bot 2 is not launched. (Round 1's fallback to B0 is dropped: B0 earned less than version 2.)
+
+### Round 2 results (run Nov 23, 2026)
+
+B7 was the candidate and did not pass: its deflated Sharpe ratio was 0.901, against the 0.95 bar. It met the other two conditions. Bot 2 is not launched. Full tables: [results/bot2_round2/summary.md](results/bot2_round2/summary.md).
+
+| Candidate | Leverage | Median 10-year return | Backtest return | Sharpe | Max drawdown | Days with exposure cut | Deflated Sharpe |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| B7: B5 with cuts from a 15% to a 30% drawdown | 1.7 | 7.0% | 7.1% | 0.45 | -26.3% | 11% | 0.901 |
+| B6: B5 with the floor at 70% of peak | 2.2 | 6.5% | 5.5% | 0.34 | -25.6% | 98% | 0.785 |
+| Version 2, no leverage | 1.0 | 5.0% | 4.9% | 0.44 | -15.5% | | 0.899 with 18 trials |
+
+What the numbers say:
+
+1. **B7's floor did its job.** It cut exposure on only 11% of days, against 98% for B6's Grossman and Zhou floor, and kept the worst drop at -26.3%.
+2. **B7's evidence is about as strong as version 2's, and no stronger.** Its deflated Sharpe ratio (0.901) is almost the same as version 2's (0.899 counting 18 trials), so it does not clear a bar that version 2 itself no longer clears. It was also designed after seeing round 1, which makes its number weaker evidence than version 2's.
+3. **Its worst stretch was long.** From the January 2018 peak to the March 2020 low, B7 fell 26.3%, more than two years below its high. It lost money in 2008, 2015, 2018, 2020 and 2022 (between -6.3% and -13.1% in each).
+4. **Reference only, not eligible:** B5 with no floor, sized so no more than 1 path in 10 falls 30%, uses 1.2x and returned 6.6% a year with a -20.2% worst drop, but 7.8% of ten-year paths fell 30% or more, so its ceiling is not firm.

@@ -15,6 +15,7 @@ Built by Miles Atkinson. The rules were written down in a spec before any backte
 | Nov 23 | Versions 5 and 6 tested against version 2 | Done (version 2 stays; versions 1 and 6 run as shadows) |
 | Nov 23 | Order check on the paper account | Done (limit orders accepted) |
 | Nov 23 | Bot 2 (returns first, 25% drawdown cap): five candidates registered and tested | Done (none passed; bot 2 not launched) |
+| Nov 23 | Bot 2, round 2 (30% ceiling): two candidates registered and tested | Done (B7 came closest but did not pass; bot 2 not launched) |
 | Nov 23 to 27 | Live bot in dry-run mode | In progress |
 | Nov 30 | Live paper trading starts (version 2; versions 1 and 6 as shadows) | Not started |
 
@@ -37,7 +38,7 @@ Versions 3 to 6 failed the deflated Sharpe ratio bar (0.875, 0.810, 0.927 and 0.
 
 ### Bot 2: returns first, with a 25% drawdown cap
 
-A second bot was planned to aim for the highest return with no more than about a 25% drop, using leverage up to 2x, a floor rule that cuts exposure as the account nears 75% of its peak, and leverage chosen by bootstrap. Five candidates were registered in [SPEC.md](SPEC.md#bot-2-registered-candidates-nov-23-2026) before testing (trials 12 to 16). None passed: the best, an equal mix of version 2, trend-timed S&P 500 and sector momentum, had a deflated Sharpe ratio of 0.785. The fallback, version 2 at 1.5x, earned 4.2% a year against 4.9% for version 2 with no leverage. The mix itself raised the Sharpe ratio to 0.53 without leverage, but the floor rule cost 1.3 to 3.3 points a year, and without it leverage broke the cap in about half or more of simulated ten-year paths ([results](results/bot2/summary.md), [diagnostics](results/bot2/diagnostics.md)). Yahoo's prices were cross-checked against Alpha Vantage: total returns for SPY and XLK since January 2007 match within 0.06%.
+A second bot was planned to aim for the highest return with no more than about a 25% drop, using leverage up to 2x, a floor rule that cuts exposure as the account nears 75% of its peak, and leverage chosen by bootstrap. Five candidates were registered in [SPEC.md](SPEC.md#bot-2-registered-candidates-nov-23-2026) before testing (trials 12 to 16). None passed: the best, an equal mix of version 2, trend-timed S&P 500 and sector momentum, had a deflated Sharpe ratio of 0.785. The fallback, version 2 at 1.5x, earned 4.2% a year against 4.9% for version 2 with no leverage. The mix itself raised the Sharpe ratio to 0.53 without leverage, but the floor rule cost 1.3 to 3.3 points a year, and without it leverage broke the cap in about half or more of simulated ten-year paths ([results](results/bot2/summary.md), [diagnostics](results/bot2/diagnostics.md)). A second round with a firm 30% ceiling tested the same mix with two floor rules (trials 17 and 18). The better one, B7, leaves exposure alone until a 15% drawdown and cuts it to zero by 30%. It returned 7.1% a year with a -26.3% worst drop and a 0.45 Sharpe ratio, but its deflated Sharpe ratio was 0.901, against 0.95, about the same as version 2's 0.899 counting all 18 trials ([round 2 results](results/bot2_round2/summary.md)). Yahoo's prices were cross-checked against Alpha Vantage: total returns for SPY and XLK since January 2007 match within 0.06%.
 
 Full results: [comparison of all versions](results/comparison.md), [version 1](results/v1/summary.md), [version 2](results/v2/summary.md), [version 3](results/v3/summary.md), [version 4](results/v4/summary.md), [version 5](results/v5/summary.md), [version 6](results/v6/summary.md).
 
@@ -62,6 +63,7 @@ The full rules are in [SPEC.md](SPEC.md).
 | `broker.py` | Talks to Alpaca's paper API and refuses any other address; also holds the pretend account the tests use |
 | `setup/trend-bot.yml` | The GitHub Actions schedule, to be copied to `.github/workflows/` |
 | `setup/order-check.yml` | A one-time, run-by-hand check that the paper account accepts the bot's limit orders |
+| `bot2_round2.py` | Bot 2's round 2 (30% ceiling): B6 and B7, after `bot2_backtest.py` (writes `results/bot2_round2/`) |
 | `bot2_backtest.py` | Bot 2's registered candidates, leverage by bootstrap and the winner rule (`python bot2_backtest.py`, writes `results/bot2/`); `tools/bot2_diagnostics.py` explains the results |
 | `backtest.py` | Runs a spec version with its benchmarks and variants over 2007 to 2026 (`python backtest.py 2`) and writes `results/v1/` to `results/v6/` |
 | `results/` | Summary, daily equity, every trade, every position from entry to exit, and the chart |

@@ -187,6 +187,9 @@ def overlay(data, leverage, idx=None, floor=True):
     numbers) it walks every bootstrap path at once; `leverage` can then be an
     array shaped (settings, 1) and the result is each path's final wealth and
     worst drop from peak, shaped (settings, paths).
+
+    `floor` is True (round 1's floor rule), False, or a function
+    (equity, peak) -> f giving another floor rule.
     """
     excess, invested, rf, spread = data
     lev = np.asarray(leverage, dtype=float)
@@ -199,7 +202,10 @@ def overlay(data, leverage, idx=None, floor=True):
         out, mult = np.empty(days), np.empty(days)
     for t in range(days):
         j = t if idx is None else idx[t]
-        f = floor_factor(wealth, peak) if floor else 1.0
+        if callable(floor):
+            f = floor(wealth, peak)
+        else:
+            f = floor_factor(wealth, peak) if floor else 1.0
         S = invested[j]
         cap = MAX_EXPOSURE / np.maximum(S, 1e-12)
         c = np.minimum(lev * f, cap)
@@ -228,15 +234,16 @@ def stationary_indices(n, length, paths, block, rng):
     return idx
 
 
-def size_by_cap(rows_df, idx):
-    """For each L in the grid: share of ten-year bootstrap paths that fall 25% or
-    more, and the median ten-year annual return."""
+def size_by_cap(rows_df, idx, floor=True, cap=CAP_DRAWDOWN):
+    """For each L in the grid: share of ten-year bootstrap paths that fall by
+    `cap` (25% unless given) or more, and the median ten-year annual return.
+    `floor` is True (the round 1 floor), False, or a function (equity, peak) -> f."""
     data = [rows_df[c].values for c in ("excess", "invested", "rf", "spread")]
-    wealth, worst = overlay(data, L_GRID[:, None], idx=idx)
+    wealth, worst = overlay(data, L_GRID[:, None], idx=idx, floor=floor)
     cagr = wealth ** (s.TRADING_DAYS / PATH_DAYS) - 1
     return pd.DataFrame({
         "leverage": L_GRID,
-        "breach_share": (worst <= CAP_DRAWDOWN).mean(axis=1),
+        "breach_share": (worst <= cap).mean(axis=1),
         "median_return": np.median(cagr, axis=1),
         "p10_return": np.quantile(cagr, 0.10, axis=1),
         "median_worst_drop": np.median(worst, axis=1),
@@ -416,7 +423,7 @@ def write_outputs(base, tables, chosen, results, v2_plain, spy, ranked, winner, 
          "median_worst_drop"]].round(5).to_csv(os.path.join(OUT, "leverage.csv"), index=False)
 
     # trials 12 to 16
-    keep = trials[trials["trial_id"] <= 11]
+    keep = trials[~trials["trial_id"].isin(list(TRIAL_IDS.values()))]   # keep every other trial, including later ones
     new = []
     for k in CANDIDATES:
         r = results[k]
@@ -426,7 +433,7 @@ def write_outputs(base, tables, chosen, results, v2_plain, spy, ranked, winner, 
                                 f"exposure at most 2x",
                     "sharpe_excess": round(r["sharpe"], 3), "max_drawdown": round(r["max_drawdown"], 4),
                     "notes": "registered in SPEC.md before testing"})
-    pd.concat([keep, pd.DataFrame(new)]).to_csv("trials.csv", index=False)
+    pd.concat([keep, pd.DataFrame(new)]).sort_values("trial_id").to_csv("trials.csv", index=False)
 
     # chart
     try:

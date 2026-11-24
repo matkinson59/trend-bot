@@ -140,3 +140,27 @@ def test_b0_base_reproduces_version_2():
     end_value = base["B0"]["daily"]["equity"].iloc[-1]
     v2 = pd.read_csv("results/v2/equity.csv", index_col="date")["trend_bot_v2"].iloc[-1]
     assert end_value == pytest.approx(v2, abs=1.0)
+
+
+def test_round2_floor_rules():
+    import bot2_round2 as r2
+    # B6: Grossman and Zhou at 70%
+    assert r2.floor_gz70(1.0, 1.0) == pytest.approx(1.0)
+    assert r2.floor_gz70(0.70, 1.0) == pytest.approx(0.0)
+    assert r2.floor_gz70(0.85, 1.0) == pytest.approx((1 - 0.70 / 0.85) / 0.30)
+    # B7: untouched to a 15% drawdown, then straight down to 0 at 30%
+    assert r2.floor_half_cap(0.90, 1.0) == pytest.approx(1.0)
+    assert r2.floor_half_cap(0.85, 1.0) == pytest.approx(1.0)
+    assert r2.floor_half_cap(0.775, 1.0) == pytest.approx(0.5)
+    assert r2.floor_half_cap(0.70, 1.0) == pytest.approx(0.0)
+    assert r2.floor_half_cap(0.60, 1.0) == pytest.approx(0.0)
+
+
+def test_round2_floors_hold_30_percent_without_large_gaps():
+    import bot2_round2 as r2
+    rows = random_rows(n=3000, seed=4, scale=0.006)
+    rows[0] = np.clip(rows[0] - 0.0008, -0.01, 0.01)
+    for fn in (r2.floor_gz70, r2.floor_half_cap):
+        R, _ = b2.overlay(rows, 3.0, floor=fn)
+        wealth = np.cumprod(1 + R)
+        assert (wealth / np.maximum.accumulate(wealth) - 1).min() > -0.30 - 0.02
