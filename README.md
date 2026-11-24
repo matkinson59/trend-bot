@@ -14,6 +14,7 @@ Built by Miles Atkinson. The rules were written down in a spec before any backte
 | Nov 23 | Live bot built and tested on a simulated account | Done |
 | Nov 23 | Versions 5 and 6 tested against version 2 | Done (version 2 stays; versions 1 and 6 run as shadows) |
 | Nov 23 | Order check on the paper account | Done (limit orders accepted) |
+| Nov 23 | Bot 2 (returns first, 25% drawdown cap): five candidates registered and tested | Done (none passed; bot 2 not launched) |
 | Nov 23 to 27 | Live bot in dry-run mode | In progress |
 | Nov 30 | Live paper trading starts (version 2; versions 1 and 6 as shadows) | Not started |
 
@@ -33,6 +34,10 @@ Six versions were written into the spec before each was tested, from February 20
 | SPY | $686,598 | 10.3% | 19.6% | 0.52 | -55.2% | |
 
 Versions 3 to 6 failed the deflated Sharpe ratio bar (0.875, 0.810, 0.927 and 0.939 against 0.95). Counting all eleven trials run so far, versions 1 and 2 also fall just below it (0.939 and 0.934). Version 5 cut the worst drop to -9.5% but earned less and had a slightly lower Sharpe ratio than version 2. Version 6 had a slightly higher Sharpe ratio (0.459 against 0.449) and a smaller worst drop (-11.3% against -15.5%), but its 15% target was chosen after seeing version 5, so it runs as a shadow rather than replacing version 2. During the live run, the log also tracks versions 1, 2 and 6 as simulated shadows from the go-live date. No version earned as much as SPY or a 60/40 portfolio. Run through the live bot's own order code with the cheaper funds, BOXX, the cash buffer and the 1% price limits, version 2 still returns 5.0% a year with a 0.452 Sharpe ratio and a -15.7% worst drop ([details](results/v2_live/summary.md)). Version 2 is locked for the live paper run and is the only version the bot runs; the live plan (cheaper equivalent funds, idle cash in a T-bill fund) is in [SPEC.md](SPEC.md#locked-version-2).
+
+### Bot 2: returns first, with a 25% drawdown cap
+
+A second bot was planned to aim for the highest return with no more than about a 25% drop, using leverage up to 2x, a floor rule that cuts exposure as the account nears 75% of its peak, and leverage chosen by bootstrap. Five candidates were registered in [SPEC.md](SPEC.md#bot-2-registered-candidates-nov-23-2026) before testing (trials 12 to 16). None passed: the best, an equal mix of version 2, trend-timed S&P 500 and sector momentum, had a deflated Sharpe ratio of 0.785. The fallback, version 2 at 1.5x, earned 4.2% a year against 4.9% for version 2 with no leverage. The mix itself raised the Sharpe ratio to 0.53 without leverage, but the floor rule cost 1.3 to 3.3 points a year, and without it leverage broke the cap in about half or more of simulated ten-year paths ([results](results/bot2/summary.md), [diagnostics](results/bot2/diagnostics.md)). Yahoo's prices were cross-checked against Alpha Vantage: total returns for SPY and XLK since January 2007 match within 0.06%.
 
 Full results: [comparison of all versions](results/comparison.md), [version 1](results/v1/summary.md), [version 2](results/v2/summary.md), [version 3](results/v3/summary.md), [version 4](results/v4/summary.md), [version 5](results/v5/summary.md), [version 6](results/v6/summary.md).
 
@@ -57,6 +62,7 @@ The full rules are in [SPEC.md](SPEC.md).
 | `broker.py` | Talks to Alpaca's paper API and refuses any other address; also holds the pretend account the tests use |
 | `setup/trend-bot.yml` | The GitHub Actions schedule, to be copied to `.github/workflows/` |
 | `setup/order-check.yml` | A one-time, run-by-hand check that the paper account accepts the bot's limit orders |
+| `bot2_backtest.py` | Bot 2's registered candidates, leverage by bootstrap and the winner rule (`python bot2_backtest.py`, writes `results/bot2/`); `tools/bot2_diagnostics.py` explains the results |
 | `backtest.py` | Runs a spec version with its benchmarks and variants over 2007 to 2026 (`python backtest.py 2`) and writes `results/v1/` to `results/v6/` |
 | `results/` | Summary, daily equity, every trade, every position from entry to exit, and the chart |
 | `tests/` | Fail if any rule uses future prices, if the portfolio shorts or borrows, if the backtest's dollars don't reconcile, if version 3 holds an ETF before it has a year of prices, or if the live bot ever borrows, trades twice in a week, or trades on stale data |

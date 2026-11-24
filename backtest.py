@@ -410,7 +410,12 @@ def main(version=1, end=None, out_root=RESULTS_DIR, trials_path="trials.csv", qu
                            "sharpe_excess": round(m[key]["sharpe"], 3),
                            "max_drawdown": round(m[key]["max_drawdown"], 4),
                            "notes": "planned in SPEC.md"})
-    pd.DataFrame(trial_rows).to_csv(trials_path, index=False)
+    # Keep later trials (bot 2, written by bot2_backtest.py) when an earlier version is re-run
+    later = None
+    if os.path.exists(trials_path):
+        old = pd.read_csv(trials_path)
+        later = old[old["trial_id"] > len(trial_rows)]
+    pd.concat([pd.DataFrame(trial_rows), later]).to_csv(trials_path, index=False)
 
     make_chart(equity_table, out, version)
 

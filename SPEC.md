@@ -515,3 +515,28 @@ Every base rule targets 10% volatility or less and never holds more than 100% of
 4. Candidates are ranked by that median return. The winner must also have a deflated Sharpe ratio of at least 0.95 on its full backtest at its chosen L, counting all 16 trials, and a higher median than B0. If none passes, bot 2 trades B0.
 5. Reported, but not used to choose: full-backtest results at the chosen L; the probability of backtest overfitting across the five (CSCV, 16 blocks); and Hansen's SPA test of the winner against B0.
 6. Disclosure: each candidate's leverage is chosen on the same history it is tested on, and the deflated Sharpe ratio counts 16 trials rather than every leverage tried, so it understates the search somewhat.
+
+### Bot 2 results (run Nov 23, 2026)
+
+No candidate passed. B5 ranked first by median ten-year bootstrap return, but its deflated Sharpe ratio was 0.785, against the 0.95 bar. Under rule 4 above, the fallback is B0, which at its chosen 1.5x earned less than version 2 does with no leverage. Full tables: [results/bot2/summary.md](results/bot2/summary.md).
+
+| Candidate | Leverage | Median 10-year return | Backtest return | Sharpe | Max drawdown | Deflated Sharpe |
+| --- | --- | --- | --- | --- | --- | --- |
+| B5: equal mix of B0, B2 and B3 | 1.9 | 6.0% | 5.0% | 0.34 | -21.5% | 0.785 |
+| B3: sector momentum | 1.3 | 4.9% | 4.0% | 0.27 | -22.0% | 0.686 |
+| B2: trend-timed S&P 500 | 1.7 | 4.9% | 3.9% | 0.26 | -19.1% | 0.675 |
+| B0: version 2, levered | 1.5 | 4.6% | 4.2% | 0.31 | -16.8% | 0.743 |
+| B4: B0 plus index reversal | 1.4 | 4.0% | 3.7% | 0.27 | -16.2% | 0.685 |
+| Version 2, no leverage (reference) | | | 4.9% | 0.44 | -15.5% | 0.898 with 16 trials |
+
+The probability of backtest overfitting across the five is 0.88, and Hansen's SPA test of B5 against B0 gives p = 0.273, so the ranking among the candidates is mostly noise.
+
+Diagnostics, chosen after seeing these results and therefore not trials ([results/bot2/diagnostics.md](results/bot2/diagnostics.md)):
+
+1. **Mixing worked; the floor rule did not.** Without leverage or the floor, B5's mix had a 0.53 Sharpe ratio, against 0.44 for version 2 on the same dates. The floor rule cuts exposure from the first small dip (at a 2% drawdown it is already down to 94%), and the candidates sat below full leverage on about 96% of days. At the chosen leverage, the floor cost 1.3 to 3.3 points a year.
+2. **Without the floor, leverage breaks the cap.** At the same leverage and with no floor, the candidates fell 25% or more in 47% to 76% of ten-year bootstrap paths (36% to 75% with 21- or 63-day blocks).
+3. **Block length did not change this.** The registered 2.9-day blocks break up runs of bad days, so 21- and 63-day blocks were also checked. With the floor, no path fell 25% at any block length. Without it, longer blocks lowered the share by 1 to 14 points.
+
+Counting all 16 trials, version 2's own deflated Sharpe ratio is now 0.898 (0.934 with 11): every extra trial raises the bar for all of them.
+
+Recommendation: do not launch bot 2 on these results. The registered fallback adds risk and earns less than version 2, and B5's better Sharpe ratio only shows without the leverage and floor rule that bot 2 exists to add. Any further test, such as B5 without the floor, would be chosen after seeing these diagnostics and would need its own registration, with that disclosed.
