@@ -479,3 +479,39 @@ Version 2 is the primary test: it is the only version that trades the paper acco
 | v6 | Version 6 | Version 5's sizing at a 15% target |
 
 Each day's row in `log/daily.csv` records `shadow_v1`, `shadow_v2` and `shadow_v6`, valued at the previous trading day's close (`shadow_close`). The bot re-runs the three simulations from the go-live date on every run, so a day Yahoo fails is filled in by the next run. No shadow places orders, and no shadow result can change which version trades before Mar 12, 2027. The write-up reports version 2's live result first and the shadows as secondary comparisons.
+
+## Bot 2: registered candidates (Nov 23, 2026)
+
+Bot 2 is a planned second paper account whose goal is the highest return with no more than about a 25% drop. Version 2 stays locked and unchanged. Everything in this section was committed before any of these candidates was backtested. They are trials 12 to 16. (The B1 to B3 benchmarks in the validation plan above are unrelated; bot 2's candidates are named B0 to B5 to match the research doc.)
+
+### Dropped before testing: B1
+
+The research plan's B1 (version 2's rules on a wider list of ETFs) is close to version 3, which added four ETFs and lowered the Sharpe ratio from 0.45 to 0.35 (trial 8). Testing a near copy of a version already known to have failed would be data snooping, so B1 is not run.
+
+### Base rules, before leverage
+
+Every base rule targets 10% volatility or less and never holds more than 100% of equity. Base backtests use `backtest.simulate`: signals at each close, fills at the next open, 5 bp on every dollar traded, T-bill interest on cash, Yahoo prices adjusted for dividends.
+
+| ID | Base rule |
+| --- | --- |
+| B0 | Version 2 exactly (`target_weights_v2` on the nine ETFs), traded on the first trading day of each week when a score changes or a weight drifts more than 2 points. |
+| B2 | Trend-timed S&P 500. At each close, if SPY is above its 200-day simple average, SPY's weight is the smaller of 100% and 10% divided by SPY's 126-day volatility; otherwise 0. The rest is cash. Traded on the first trading day of each week when the signal changes or the weight drifts more than 2 points. |
+| B3 | Sector momentum. Universe: XLB, XLE, XLF, XLI, XLK, XLP, XLU, XLV and XLY, plus XLRE and XLC once each has 252 days of prices. At each close, momentum is the return from 252 to 21 trading days ago. A sector is eligible if its momentum beats T-bills over the same 231 days. Hold the three eligible sectors with the highest momentum (fewer if fewer pass), each at k/3, where k is the smaller of 1 and 10% divided by the volatility of the held sectors at 1/3 each (126 days of returns). Traded on the first trading day of each month when the holdings change or a weight drifts more than 2 points. |
+| B4 | B0 plus an index-reversal tilt. B0's weights and scores are set on the first trading day of each week and held through the week. Each day, SPY's weight is multiplied by m = 1 - z, limited to between 0 and 2, where z = (4r1 + 3r2 + 2r3 + r4) / (σ √30), r1 to r4 are SPY's last four daily returns (r1 the latest) and σ is SPY's 126-day standard deviation of daily returns. The lag weights are Baltussen, van Bekkum and Da's. If the total is above 100%, every weight scales down to 100%. Checked daily: a weight is traded when it drifts more than 2 points or its score changes. |
+| B5 | Equal-weight mix of B0, B2 and B3. Each sleeve's base weights are set on its own trade days and held in between. Each day the three are averaged, with each sleeve's weight per ETF divided by 3 and added together. Traded on the first trading day of each week when a weight drifts more than 2 points. Equal weights, because none of 14 optimized models consistently beat 1/N out of sample ([DeMiguel, Garlappi and Uppal 2009](https://ideas.repec.org/a/oup/rfinst/v22y2009i5p1915-1953.html)). B4's reversal is left out of the mix because its evidence is the weakest (before costs, ending in 2016). |
+
+### Bot 2 rules applied to every candidate
+
+1. **Leverage.** Exposure is the base weight times c, where c = L × f, and total exposure is capped at 2 times equity (Alpaca's overnight limit).
+2. **Floor rule** (Grossman and Zhou 1993). f = 4 × (1 - 0.75 × peak / equity), limited to between 0 and 1, from the previous close's equity and its running peak. At a peak f is 1; at a 25% drawdown it is 0.
+3. **Financing.** Exposure above 100% of equity pays the T-bill rate plus a spread: each ETF's measured 2x-fund cost (`strategy.TWO_X_COST`) where it has a 2x fund, and otherwise Alpaca's margin spread of 2.38% (6.50% less today's 4.12% T-bill), averaged by base weight. Below 100%, the rest earns T-bills.
+4. **Levered returns** scale each base backtest's daily return above T-bills: R = rf + c × (r_base - rf) - max(0, c × S - 1) × spread / 252, where S is the base's invested share that day. Base trading costs scale with c, and every change in c × S costs another 5 bp.
+
+### Choosing leverage and the winner
+
+1. Period: Feb 12, 2007 to Nov 20, 2026, the same as version 2's backtest.
+2. For each candidate and each L from 1.0 to 3.0 in steps of 0.1: 10,000 ten-year (2,520-day) paths from a stationary bootstrap of the base backtest's daily rows (return above T-bills, invested share, T-bill rate, spread), with the mean block length from Politis and White (`arch.bootstrap.optimal_block_length`) and seed 0. The floor rule runs along each path.
+3. An L is allowed if no more than 10% of paths fall 25% or more from their peak. The candidate's L is the allowed one with the highest median ten-year annual return. This replaces the research plan's "highest allowed leverage": with the floor rule nearly every leverage passes, so the highest would just be the top of the grid.
+4. Candidates are ranked by that median return. The winner must also have a deflated Sharpe ratio of at least 0.95 on its full backtest at its chosen L, counting all 16 trials, and a higher median than B0. If none passes, bot 2 trades B0.
+5. Reported, but not used to choose: full-backtest results at the chosen L; the probability of backtest overfitting across the five (CSCV, 16 blocks); and Hansen's SPA test of the winner against B0.
+6. Disclosure: each candidate's leverage is chosen on the same history it is tested on, and the deflated Sharpe ratio counts 16 trials rather than every leverage tried, so it understates the search somewhat.
