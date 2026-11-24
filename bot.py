@@ -38,7 +38,7 @@ MIN_ORDER = 1.00          # smallest order in dollars
 MIN_BOXX_ORDER = 50.00    # smallest move into or out of BOXX
 MAX_ORDER = 0.30          # largest single ETF order, as a share of equity (BOXX exempt: it is cash)
 SHADOWS = {"v1": "target_weights", "v2": "target_weights_v2", "v6": "target_weights_v6"}
-B7_LEVERAGE = 1.7         # bot 2 round 2's B7, at the leverage its cap rule chose (results/bot2_round2)
+V7_LEVERAGE = 1.7         # version 7 (registered as bot 2's B7), at the leverage its cap rule chose
 DRAWDOWN_FLAG = 0.10
 COST_BPS = 5
 PHASE_TIMEOUT = 180       # seconds to wait for each group of orders to fill
@@ -111,14 +111,14 @@ def yahoo_bars(start, today):
     return s.load_bars(start=str(start))
 
 
-def yahoo_b7_bars(start, today):
+def yahoo_v7_bars(start, today):
     import bot2_backtest as b2
     return s.load_bars(start=str(start), tickers=list(dict.fromkeys(s.TICKERS + b2.SECTORS)),
                        require=s.TICKERS + b2.SECTORS_CORE)
 
 
-def b7_equity(start, opens, closes, rates):
-    """B7 (bot 2 round 2): B5's equal mix of version 2, trend-timed S&P 500 and
+def v7_equity(start, opens, closes, rates):
+    """Version 7 (bot 2 round 2, registered as B7): B5's equal mix of version 2, trend-timed S&P 500 and
     sector momentum at 1.7x, with exposure cut in a straight line from a 15% to
     a 30% drawdown. $100,000 at `start`, through the last close in `closes`."""
     import bot2_backtest as b2
@@ -133,14 +133,14 @@ def b7_equity(start, opens, closes, rates):
                            rates, weekly, start)
     rows = b2.base_rows(daily, rates, used)
     R, _ = b2.overlay([rows[c].values for c in ("excess", "invested", "rf", "spread")],
-                      B7_LEVERAGE, floor=floor_half_cap)
+                      V7_LEVERAGE, floor=floor_half_cap)
     return round(b2.bt.START_VALUE * float(np.prod(1 + R)), 2)
 
 
-def shadow_equity(since, today, tbill, bars_fn=yahoo_bars, b7_bars_fn=yahoo_b7_bars):
+def shadow_equity(since, today, tbill, bars_fn=yahoo_bars, v7_bars_fn=yahoo_v7_bars):
     """Simulated equity of each shadow version, $100,000 on the go-live date,
     run with the backtest's own simulator through the last finished close.
-    Returns ({version: equity}, date of that close). B7 is None when its data
+    Returns ({version: equity}, date of that close). Version 7 is None when its data
     or rules fail, so a problem there never blanks the other shadows."""
     from backtest import START_VALUE, first_day_of_week, simulate
     start = pd.Timestamp(since)
@@ -148,7 +148,7 @@ def shadow_equity(since, today, tbill, bars_fn=yahoo_bars, b7_bars_fn=yahoo_b7_b
     keep = closes.index.date < today
     opens, closes = opens[keep], closes[keep]
     if closes.empty or closes.index[-1] < start:
-        return {**{k: START_VALUE for k in SHADOWS}, "b7": START_VALUE}, None
+        return {**{k: START_VALUE for k in SHADOWS}, "v7": START_VALUE}, None
     rates = tbill.reindex(closes.index.union(tbill.index)).ffill().reindex(closes.index).bfill()
     weekly = first_day_of_week(closes.index)
     scores = s.trend_scores(closes, rates)
@@ -157,15 +157,15 @@ def shadow_equity(since, today, tbill, bars_fn=yahoo_bars, b7_bars_fn=yahoo_b7_b
         daily, _, _ = simulate(getattr(s, fn)(closes, rates), scores, opens, closes, rates, weekly, start)
         out[name] = round(float(daily["equity"].iloc[-1]), 2)
     try:
-        o7, c7 = b7_bars_fn((start - pd.DateOffset(years=3)).date(), today)
+        o7, c7 = v7_bars_fn((start - pd.DateOffset(years=3)).date(), today)
         keep7 = c7.index <= closes.index[-1]
         o7, c7 = o7[keep7], c7[keep7]
         if c7.index[-1] != closes.index[-1]:
-            raise ValueError("B7 prices end on a different day")
+            raise ValueError("version 7's prices end on a different day")
         r7 = tbill.reindex(c7.index.union(tbill.index)).ffill().reindex(c7.index).bfill()
-        out["b7"] = b7_equity(start, o7, c7, r7)
+        out["v7"] = v7_equity(start, o7, c7, r7)
     except Exception:  # noqa: BLE001
-        out["b7"] = None
+        out["v7"] = None
     return out, closes.index[-1].date()
 
 

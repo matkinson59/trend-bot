@@ -477,9 +477,9 @@ Version 2 is the primary test: it is the only version that trades the paper acco
 | v1 | Version 1 (10% volatility as a ceiling) | The original spec |
 | v2 | Version 2, simulated | Measures the gap between the paper account and the backtest's assumptions |
 | v6 | Version 6 | Version 5's sizing at a 15% target |
-| b7 | Bot 2's B7: B5's equal mix of version 2, trend-timed S&P 500 and sector momentum at 1.7x, with exposure cut in a straight line from a 15% to a 30% drawdown (sector prices from Yahoo; same leverage formula, financing and costs as the bot 2 backtest) | The closest bot 2 candidate; it did not pass, so a live record on new data is the only way to settle whether it beats version 2 |
+| v7 | Version 7 (registered as bot 2's B7): B5's equal mix of version 2, trend-timed S&P 500 and sector momentum at 1.7x, with exposure cut in a straight line from a 15% to a 30% drawdown (sector prices from Yahoo; same leverage formula, financing and costs as the bot 2 backtest) | The closest bot 2 candidate; it did not pass, so a live record on new data is the only way to settle whether it beats version 2 |
 
-Each day's row in `log/daily.csv` records `shadow_v1`, `shadow_v2`, `shadow_v6` and `shadow_b7`, valued at the previous trading day's close (`shadow_close`). B7 downloads its own prices; if they or its rules fail, its cell is left blank and the day is flagged, and the other shadows are unaffected. The bot re-runs the four simulations from the go-live date on every run, so a day Yahoo fails is filled in by the next run. No shadow places orders, and no shadow result can change which version trades before Mar 12, 2027. The write-up reports version 2's live result first and the shadows as secondary comparisons.
+Each day's row in `log/daily.csv` records `shadow_v1`, `shadow_v2`, `shadow_v6` and `shadow_v7`, valued at the previous trading day's close (`shadow_close`). Version 7 downloads its own prices; if they or its rules fail, its cell is left blank and the day is flagged, and the other shadows are unaffected. The bot re-runs the four simulations from the go-live date on every run, so a day Yahoo fails is filled in by the next run. No shadow places orders, and no shadow result can change which version trades before Mar 12, 2027. The write-up reports version 2's live result first and the shadows as secondary comparisons.
 
 ## Bot 2: registered candidates (Nov 23, 2026)
 
@@ -544,36 +544,36 @@ Recommendation: do not launch bot 2 on these results. The registered fallback ad
 
 ## Bot 2, round 2: a 30% ceiling (registered Nov 23, 2026)
 
-Miles set a firm ceiling: the worst drop may be 30%, and no more. Sizing by bootstrap alone cannot promise that (it allows a breach in one of ten simulated decades), so both candidates keep a floor rule. Everything in this section was committed before either was backtested. They are trials 17 and 18.
+Miles set a firm ceiling: the worst drop may be 30%, and no more. Sizing by bootstrap alone cannot promise that (it allows a breach in one of ten simulated decades), so both candidates keep a floor rule. Everything in this section was committed before either was backtested. They are trials 17 and 18. B7 was renamed version 7 after it was chosen as a shadow; its rules are unchanged.
 
-**Disclosure.** Both were chosen after seeing round 1: B5 was the strongest base rule, and the Grossman and Zhou floor's early cuts were the main drag, which is what B7's floor is designed around. The deflated Sharpe ratio counts the 18 trials but cannot correct for choices informed by earlier results, so a pass here would be weaker evidence than a pass in round 1.
+**Disclosure.** Both were chosen after seeing round 1: B5 was the strongest base rule, and the Grossman and Zhou floor's early cuts were the main drag, which is what version 7's floor is designed around. The deflated Sharpe ratio counts the 18 trials but cannot correct for choices informed by earlier results, so a pass here would be weaker evidence than a pass in round 1.
 
 | ID | Rule |
 | --- | --- |
 | B6 | B5's base rule (unchanged), with the Grossman and Zhou floor moved to 70% of the running peak: f = (1 - 0.70 × peak / equity) / 0.30, limited to between 0 and 1. |
-| B7 | B5's base rule (unchanged), with a floor that leaves exposure alone until the drawdown reaches 15%, then cuts it in a straight line to zero at 30%: f = (0.30 + drawdown) / 0.15, limited to between 0 and 1, where drawdown = equity / peak - 1. |
+| Version 7 (registered as B7) | B5's base rule (unchanged), with a floor that leaves exposure alone until the drawdown reaches 15%, then cuts it in a straight line to zero at 30%: f = (0.30 + drawdown) / 0.15, limited to between 0 and 1, where drawdown = equity / peak - 1. |
 
 Everything else is as in round 1: c = L × f; total exposure at most 2 times equity; the same financing, costs and levered-return formula; the same period; the same 10,000 ten-year bootstrap paths (2.9-day mean blocks, seed 0); L from 1.0 to 3.0 in steps of 0.1.
 
 Choosing leverage and deciding:
 
 1. An L is allowed if no more than 10% of paths fall 30% or more from their peak. Each candidate's L is the allowed one with the highest median ten-year annual return.
-2. The higher median of B6 and B7 is the candidate. It passes only if all three hold: its deflated Sharpe ratio on the full backtest at its chosen L is at least 0.95, counting all 18 trials; its median beats version 2's with no leverage and no floor on the same paths; and its full-backtest worst drop is smaller than 30%.
+2. The higher median of B6 and version 7 is the candidate. It passes only if all three hold: its deflated Sharpe ratio on the full backtest at its chosen L is at least 0.95, counting all 18 trials; its median beats version 2's with no leverage and no floor on the same paths; and its full-backtest worst drop is smaller than 30%.
 3. If it does not pass, bot 2 is not launched. (Round 1's fallback to B0 is dropped: B0 earned less than version 2.)
 
 ### Round 2 results (run Nov 23, 2026)
 
-B7 was the candidate and did not pass: its deflated Sharpe ratio was 0.901, against the 0.95 bar. It met the other two conditions. Bot 2 is not launched. Full tables: [results/bot2_round2/summary.md](results/bot2_round2/summary.md).
+Version 7 was the candidate and did not pass: its deflated Sharpe ratio was 0.901, against the 0.95 bar. It met the other two conditions. Bot 2 is not launched. Full tables: [results/bot2_round2/summary.md](results/bot2_round2/summary.md).
 
 | Candidate | Leverage | Median 10-year return | Backtest return | Sharpe | Max drawdown | Days with exposure cut | Deflated Sharpe |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| B7: B5 with cuts from a 15% to a 30% drawdown | 1.7 | 7.0% | 7.1% | 0.45 | -26.3% | 11% | 0.901 |
+| Version 7: B5 with cuts from a 15% to a 30% drawdown | 1.7 | 7.0% | 7.1% | 0.45 | -26.3% | 11% | 0.901 |
 | B6: B5 with the floor at 70% of peak | 2.2 | 6.5% | 5.5% | 0.34 | -25.6% | 98% | 0.785 |
 | Version 2, no leverage | 1.0 | 5.0% | 4.9% | 0.44 | -15.5% | | 0.899 with 18 trials |
 
 What the numbers say:
 
-1. **B7's floor did its job.** It cut exposure on only 11% of days, against 98% for B6's Grossman and Zhou floor, and kept the worst drop at -26.3%.
-2. **B7's evidence is about as strong as version 2's, and no stronger.** Its deflated Sharpe ratio (0.901) is almost the same as version 2's (0.899 counting 18 trials), so it does not clear a bar that version 2 itself no longer clears. It was also designed after seeing round 1, which makes its number weaker evidence than version 2's.
-3. **Its worst stretch was long.** From the January 2018 peak to the March 2020 low, B7 fell 26.3%, more than two years below its high. It lost money in 2008, 2015, 2018, 2020 and 2022 (between -6.3% and -13.1% in each).
+1. **Version 7's floor did its job.** It cut exposure on only 11% of days, against 98% for B6's Grossman and Zhou floor, and kept the worst drop at -26.3%.
+2. **Version 7's evidence is about as strong as version 2's, and no stronger.** Its deflated Sharpe ratio (0.901) is almost the same as version 2's (0.899 counting 18 trials), so it does not clear a bar that version 2 itself no longer clears. It was also designed after seeing round 1, which makes its number weaker evidence than version 2's.
+3. **Its worst stretch was long.** From the January 2018 peak to the March 2020 low, version 7 fell 26.3%, more than two years below its high. It lost money in 2008, 2015, 2018, 2020 and 2022 (between -6.3% and -13.1% in each).
 4. **Reference only, not eligible:** B5 with no floor, sized so no more than 1 path in 10 falls 30%, uses 1.2x and returned 6.6% a year with a -20.2% worst drop, but 7.8% of ten-year paths fell 30% or more, so its ceiling is not firm.

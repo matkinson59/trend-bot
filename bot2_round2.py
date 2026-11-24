@@ -1,6 +1,7 @@
 """
 bot2_round2.py: bot 2, round 2 (SPEC.md, "Bot 2, round 2: a 30% ceiling").
-B6 and B7 are B5's base rule with two floor rules for a 30% ceiling.
+B6 and version 7 (registered as B7) are B5's base rule with two floor rules
+for a 30% ceiling.
 
 Usage:  python bot2_round2.py   (after bot2_backtest.py)
 
@@ -19,9 +20,9 @@ import strategy as s
 
 CEILING = -0.30
 OUT = os.path.join(bt.RESULTS_DIR, "bot2_round2")
-TRIAL_IDS = {"B6": 17, "B7": 18}
+TRIAL_IDS = {"B6": 17, "v7": 18}
 LABEL = {"B6": "B6: B5 with the floor at 70% of peak",
-         "B7": "B7: B5 with cuts from a 15% to a 30% drawdown"}
+         "v7": "Version 7 (registered as B7): B5 with cuts from a 15% to a 30% drawdown"}
 
 
 def floor_gz70(equity, peak):
@@ -35,7 +36,7 @@ def floor_half_cap(equity, peak):
     return np.clip((0.30 + drawdown) / 0.15, 0.0, 1.0)
 
 
-FLOORS = {"B6": floor_gz70, "B7": floor_half_cap}
+FLOORS = {"B6": floor_gz70, "v7": floor_half_cap}
 
 
 def main():

@@ -256,8 +256,8 @@ def test_shadows_follow_the_backtest_from_go_live():
     closes, tbill = data[0], data[1]
     bars = lambda start, today: (closes * 0.999, closes)          # opens a touch below closes
     out, close_day = bot.shadow_equity("2026-12-14", date(2026, 12, 21), tbill, bars_fn=bars,
-                                       b7_bars_fn=make_b7_bars)
-    assert close_day == date(2026, 12, 18) and set(out) == {"v1", "v2", "v6", "b7"}
+                                       v7_bars_fn=make_v7_bars)
+    assert close_day == date(2026, 12, 18) and set(out) == {"v1", "v2", "v6", "v7"}
     assert all(50_000 < v < 150_000 for v in out.values())
     from backtest import first_day_of_week, simulate
     weekly = first_day_of_week(closes.index)
@@ -265,11 +265,11 @@ def test_shadows_follow_the_backtest_from_go_live():
                       closes * 0.999, closes, tbill, weekly, pd.Timestamp("2026-12-14"))[0]["equity"].iloc[-1]
     assert abs(out["v2"] - expect) < 0.01
     before, none_yet = bot.shadow_equity("2026-12-21", date(2026, 12, 21), tbill, bars_fn=bars,
-                                         b7_bars_fn=make_b7_bars)
-    assert none_yet is None and set(before.values()) == {100_000.0} and "b7" in before
+                                         v7_bars_fn=make_v7_bars)
+    assert none_yet is None and set(before.values()) == {100_000.0} and "v7" in before
 
 
-def make_b7_bars(start=None, today=None, end="2026-12-18", n=900, seed=7):
+def make_v7_bars(start=None, today=None, end="2026-12-18", n=900, seed=7):
     """Made-up prices for the nine ETFs and the eleven sector funds."""
     import bot2_backtest as b2
     tickers = list(dict.fromkeys(s.TICKERS + b2.SECTORS))
@@ -280,31 +280,31 @@ def make_b7_bars(start=None, today=None, end="2026-12-18", n=900, seed=7):
     return closes * 0.999, closes
 
 
-def test_b7_shadow_runs_its_rules_from_go_live():
+def test_v7_shadow_runs_its_rules_from_go_live():
     closes9, tbill, _ = make_data(end="2026-12-18")
     bars = lambda start, today: (closes9 * 0.999, closes9)
-    out, _ = bot.shadow_equity("2026-12-14", date(2026, 12, 21), tbill, bars_fn=bars, b7_bars_fn=make_b7_bars)
-    o7, c7 = make_b7_bars()
+    out, _ = bot.shadow_equity("2026-12-14", date(2026, 12, 21), tbill, bars_fn=bars, v7_bars_fn=make_v7_bars)
+    o7, c7 = make_v7_bars()
     rates = pd.Series(0.04, index=c7.index)
-    direct = bot.b7_equity(pd.Timestamp("2026-12-14"), o7, c7, rates)
-    assert out["b7"] == direct and 50_000 < direct < 150_000 and direct != 100_000.0
+    direct = bot.v7_equity(pd.Timestamp("2026-12-14"), o7, c7, rates)
+    assert out["v7"] == direct and 50_000 < direct < 150_000 and direct != 100_000.0
 
 
-def test_b7_failure_leaves_other_shadows_and_is_flagged(tmp_path):
+def test_v7_failure_leaves_other_shadows_and_is_flagged(tmp_path):
     closes9, tbill, _ = make_data(end="2026-12-18")
     bars = lambda start, today: (closes9 * 0.999, closes9)
 
     def broken(start, today):
         raise ConnectionError("no sector data")
 
-    out, close_day = bot.shadow_equity("2026-12-14", date(2026, 12, 21), tbill, bars_fn=bars, b7_bars_fn=broken)
-    assert out["b7"] is None and all(out[k] is not None for k in ("v1", "v2", "v6"))
+    out, close_day = bot.shadow_equity("2026-12-14", date(2026, 12, 21), tbill, bars_fn=bars, v7_bars_fn=broken)
+    assert out["v7"] is None and all(out[k] is not None for k in ("v1", "v2", "v6"))
     data = make_data()
     broker = SimBroker(100_000, FUND_PRICES, trading_days(data, [date(2026, 12, 14)]))
     row = bot.run(broker, True, log_dir=tmp_path, now=at("2026-12-14"), data=data,
                   dividend_fn=lambda sym: pd.Series(dtype=float), opens_fn=lambda syms: {}, timeout=0,
-                  shadow_fn=lambda since, today, tbill: ({"v1": 1.0, "v2": 2.0, "v6": 6.0, "b7": None}, None))
-    assert "shadow b7 not updated" in row["flags"]
+                  shadow_fn=lambda since, today, tbill: ({"v1": 1.0, "v2": 2.0, "v6": 6.0, "v7": None}, None))
+    assert "shadow v7 not updated" in row["flags"]
 
 
 def test_shadows_are_logged_only_once_live(tmp_path):

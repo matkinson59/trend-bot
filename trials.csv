@@ -16,4 +16,4 @@ trial_id,date_run,spec_version,description,settings,sharpe_excess,max_drawdown,n
 15,2026-11-23,bot2,B4: B0 plus index reversal,leverage 1.4 by the cap rule; floor at 75% of peak; exposure at most 2x,0.27,-0.1622,registered in SPEC.md before testing
 16,2026-11-23,bot2,"B5: equal mix of B0, B2 and B3",leverage 1.9 by the cap rule; floor at 75% of peak; exposure at most 2x,0.34,-0.2146,registered in SPEC.md before testing
 17,2026-11-23,bot2 round 2,B6: B5 with the floor at 70% of peak,leverage 2.2 by the 30% rule; exposure at most 2x,0.339,-0.2559,registered before testing; chosen after seeing round 1
-18,2026-11-23,bot2 round 2,B7: B5 with cuts from a 15% to a 30% drawdown,leverage 1.7 by the 30% rule; exposure at most 2x,0.453,-0.263,registered before testing; chosen after seeing round 1
+18,2026-11-23,bot2 round 2,Version 7 (registered as B7): B5 with cuts from a 15% to a 30% drawdown,leverage 1.7 by the 30% rule; exposure at most 2x,0.453,-0.263,registered before testing; chosen after seeing round 1

@@ -148,7 +148,7 @@ def test_round2_floor_rules():
     assert r2.floor_gz70(1.0, 1.0) == pytest.approx(1.0)
     assert r2.floor_gz70(0.70, 1.0) == pytest.approx(0.0)
     assert r2.floor_gz70(0.85, 1.0) == pytest.approx((1 - 0.70 / 0.85) / 0.30)
-    # B7: untouched to a 15% drawdown, then straight down to 0 at 30%
+    # Version 7 (B7): untouched to a 15% drawdown, then straight down to 0 at 30%
     assert r2.floor_half_cap(0.90, 1.0) == pytest.approx(1.0)
     assert r2.floor_half_cap(0.85, 1.0) == pytest.approx(1.0)
     assert r2.floor_half_cap(0.775, 1.0) == pytest.approx(0.5)
