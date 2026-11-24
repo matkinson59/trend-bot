@@ -540,3 +540,22 @@ Diagnostics, chosen after seeing these results and therefore not trials ([result
 Counting all 16 trials, version 2's own deflated Sharpe ratio is now 0.898 (0.934 with 11): every extra trial raises the bar for all of them.
 
 Recommendation: do not launch bot 2 on these results. The registered fallback adds risk and earns less than version 2, and B5's better Sharpe ratio only shows without the leverage and floor rule that bot 2 exists to add. Any further test, such as B5 without the floor, would be chosen after seeing these diagnostics and would need its own registration, with that disclosed.
+
+## Bot 2, round 2: a 30% ceiling (registered Nov 23, 2026)
+
+Miles set a firm ceiling: the worst drop may be 30%, and no more. Sizing by bootstrap alone cannot promise that (it allows a breach in one of ten simulated decades), so both candidates keep a floor rule. Everything in this section was committed before either was backtested. They are trials 17 and 18.
+
+**Disclosure.** Both were chosen after seeing round 1: B5 was the strongest base rule, and the Grossman and Zhou floor's early cuts were the main drag, which is what B7's floor is designed around. The deflated Sharpe ratio counts the 18 trials but cannot correct for choices informed by earlier results, so a pass here would be weaker evidence than a pass in round 1.
+
+| ID | Rule |
+| --- | --- |
+| B6 | B5's base rule (unchanged), with the Grossman and Zhou floor moved to 70% of the running peak: f = (1 - 0.70 × peak / equity) / 0.30, limited to between 0 and 1. |
+| B7 | B5's base rule (unchanged), with a floor that leaves exposure alone until the drawdown reaches 15%, then cuts it in a straight line to zero at 30%: f = (0.30 + drawdown) / 0.15, limited to between 0 and 1, where drawdown = equity / peak - 1. |
+
+Everything else is as in round 1: c = L × f; total exposure at most 2 times equity; the same financing, costs and levered-return formula; the same period; the same 10,000 ten-year bootstrap paths (2.9-day mean blocks, seed 0); L from 1.0 to 3.0 in steps of 0.1.
+
+Choosing leverage and deciding:
+
+1. An L is allowed if no more than 10% of paths fall 30% or more from their peak. Each candidate's L is the allowed one with the highest median ten-year annual return.
+2. The higher median of B6 and B7 is the candidate. It passes only if all three hold: its deflated Sharpe ratio on the full backtest at its chosen L is at least 0.95, counting all 18 trials; its median beats version 2's with no leverage and no floor on the same paths; and its full-backtest worst drop is smaller than 30%.
+3. If it does not pass, bot 2 is not launched. (Round 1's fallback to B0 is dropped: B0 earned less than version 2.)
