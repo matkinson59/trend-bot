@@ -12,7 +12,6 @@ from math import sqrt
 
 import numpy as np
 import pandas as pd
-from arch.bootstrap import optimal_block_length
 
 import backtest as bt
 import bot2_backtest as b2
@@ -40,6 +39,8 @@ FLOORS = {"B6": floor_gz70, "B7": floor_half_cap}
 
 
 def main():
+    from arch.bootstrap import optimal_block_length   # research only; the live bot never needs arch
+
     os.makedirs(OUT, exist_ok=True)
     base, spy_hold, tbill = b2.run_bases()
     rows = {k: b2.base_rows(base[k]["daily"], tbill, base[k]["used"]) for k in ("B0", "B5")}

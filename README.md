@@ -17,7 +17,7 @@ Built by Miles Atkinson. The rules were written down in a spec before any backte
 | Nov 23 | Bot 2 (returns first, 25% drawdown cap): five candidates registered and tested | Done (none passed; bot 2 not launched) |
 | Nov 23 | Bot 2, round 2 (30% ceiling): two candidates registered and tested | Done (B7 came closest but did not pass; bot 2 not launched) |
 | Nov 23 to 27 | Live bot in dry-run mode | In progress |
-| Nov 30 | Live paper trading starts (version 2; versions 1 and 6 as shadows) | Not started |
+| Nov 30 | Live paper trading starts (version 2; versions 1 and 6 and bot 2's B7 as shadows) | Not started |
 
 ## Backtest
 
@@ -34,7 +34,7 @@ Six versions were written into the spec before each was tested, from February 20
 | 60% SPY / 40% IEF | $440,824 | 7.8% | 11.0% | 0.60 | -32.5% | |
 | SPY | $686,598 | 10.3% | 19.6% | 0.52 | -55.2% | |
 
-Versions 3 to 6 failed the deflated Sharpe ratio bar (0.875, 0.810, 0.927 and 0.939 against 0.95). Counting all eleven trials run so far, versions 1 and 2 also fall just below it (0.939 and 0.934). Version 5 cut the worst drop to -9.5% but earned less and had a slightly lower Sharpe ratio than version 2. Version 6 had a slightly higher Sharpe ratio (0.459 against 0.449) and a smaller worst drop (-11.3% against -15.5%), but its 15% target was chosen after seeing version 5, so it runs as a shadow rather than replacing version 2. During the live run, the log also tracks versions 1, 2 and 6 as simulated shadows from the go-live date. No version earned as much as SPY or a 60/40 portfolio. Run through the live bot's own order code with the cheaper funds, BOXX, the cash buffer and the 1% price limits, version 2 still returns 5.0% a year with a 0.452 Sharpe ratio and a -15.7% worst drop ([details](results/v2_live/summary.md)). Version 2 is locked for the live paper run and is the only version the bot runs; the live plan (cheaper equivalent funds, idle cash in a T-bill fund) is in [SPEC.md](SPEC.md#locked-version-2).
+Versions 3 to 6 failed the deflated Sharpe ratio bar (0.875, 0.810, 0.927 and 0.939 against 0.95). Counting the eleven trials of versions 1 to 6, versions 1 and 2 also fall just below it (0.939 and 0.934); counting all 18 trials, including bot 2's, version 2's is 0.899. Version 5 cut the worst drop to -9.5% but earned less and had a slightly lower Sharpe ratio than version 2. Version 6 had a slightly higher Sharpe ratio (0.459 against 0.449) and a smaller worst drop (-11.3% against -15.5%), but its 15% target was chosen after seeing version 5, so it runs as a shadow rather than replacing version 2. During the live run, the log also tracks versions 1, 2 and 6 and bot 2's B7 as simulated shadows from the go-live date. No version earned as much as SPY or a 60/40 portfolio. Run through the live bot's own order code with the cheaper funds, BOXX, the cash buffer and the 1% price limits, version 2 still returns 5.0% a year with a 0.452 Sharpe ratio and a -15.7% worst drop ([details](results/v2_live/summary.md)). Version 2 is locked for the live paper run and is the only version the bot runs; the live plan (cheaper equivalent funds, idle cash in a T-bill fund) is in [SPEC.md](SPEC.md#locked-version-2).
 
 ### Bot 2: returns first, with a 25% drawdown cap
 

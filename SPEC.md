@@ -470,15 +470,16 @@ Result (Nov 23, 2026): failed the deflated Sharpe bar (0.939 over eleven trials)
 
 ## Shadow versions during the live run
 
-Version 2 is the primary test: it is the only version that trades the paper account. From the first live run, the daily log also tracks three simulated portfolios that each start at $100,000 on the go-live date and follow the backtest's own rules on Yahoo prices (signals at each close, trades at the next open on the week's first trading day, a 5 bp cost, cash earning T-bills, dividends included in the prices):
+Version 2 is the primary test: it is the only version that trades the paper account. From the first live run, the daily log also tracks four simulated portfolios that each start at $100,000 on the go-live date and follow the backtest's own rules on Yahoo prices (signals at each close, trades at the next open on the week's first trading day, a 5 bp cost, cash earning T-bills, dividends included in the prices):
 
 | Shadow | Rule | Why |
 | --- | --- | --- |
 | v1 | Version 1 (10% volatility as a ceiling) | The original spec |
 | v2 | Version 2, simulated | Measures the gap between the paper account and the backtest's assumptions |
 | v6 | Version 6 | Version 5's sizing at a 15% target |
+| b7 | Bot 2's B7: B5's equal mix of version 2, trend-timed S&P 500 and sector momentum at 1.7x, with exposure cut in a straight line from a 15% to a 30% drawdown (sector prices from Yahoo; same leverage formula, financing and costs as the bot 2 backtest) | The closest bot 2 candidate; it did not pass, so a live record on new data is the only way to settle whether it beats version 2 |
 
-Each day's row in `log/daily.csv` records `shadow_v1`, `shadow_v2` and `shadow_v6`, valued at the previous trading day's close (`shadow_close`). The bot re-runs the three simulations from the go-live date on every run, so a day Yahoo fails is filled in by the next run. No shadow places orders, and no shadow result can change which version trades before Mar 12, 2027. The write-up reports version 2's live result first and the shadows as secondary comparisons.
+Each day's row in `log/daily.csv` records `shadow_v1`, `shadow_v2`, `shadow_v6` and `shadow_b7`, valued at the previous trading day's close (`shadow_close`). B7 downloads its own prices; if they or its rules fail, its cell is left blank and the day is flagged, and the other shadows are unaffected. The bot re-runs the four simulations from the go-live date on every run, so a day Yahoo fails is filled in by the next run. No shadow places orders, and no shadow result can change which version trades before Mar 12, 2027. The write-up reports version 2's live result first and the shadows as secondary comparisons.
 
 ## Bot 2: registered candidates (Nov 23, 2026)
 

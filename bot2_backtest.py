@@ -14,7 +14,6 @@ from math import sqrt
 
 import numpy as np
 import pandas as pd
-from arch.bootstrap import SPA, optimal_block_length
 
 import backtest as bt
 import strategy as s
@@ -345,6 +344,8 @@ def run_bases():
 
 
 def main():
+    from arch.bootstrap import SPA, optimal_block_length   # research only; the live bot never needs arch
+
     os.makedirs(OUT, exist_ok=True)
     base, spy_hold, tbill = run_bases()
 

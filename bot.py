@@ -38,6 +38,7 @@ MIN_ORDER = 1.00          # smallest order in dollars
 MIN_BOXX_ORDER = 50.00    # smallest move into or out of BOXX
 MAX_ORDER = 0.30          # largest single ETF order, as a share of equity (BOXX exempt: it is cash)
 SHADOWS = {"v1": "target_weights", "v2": "target_weights_v2", "v6": "target_weights_v6"}
+B7_LEVERAGE = 1.7         # bot 2 round 2's B7, at the leverage its cap rule chose (results/bot2_round2)
 DRAWDOWN_FLAG = 0.10
 COST_BPS = 5
 PHASE_TIMEOUT = 180       # seconds to wait for each group of orders to fill
@@ -110,17 +111,44 @@ def yahoo_bars(start, today):
     return s.load_bars(start=str(start))
 
 
-def shadow_equity(since, today, tbill, bars_fn=yahoo_bars):
+def yahoo_b7_bars(start, today):
+    import bot2_backtest as b2
+    return s.load_bars(start=str(start), tickers=list(dict.fromkeys(s.TICKERS + b2.SECTORS)),
+                       require=s.TICKERS + b2.SECTORS_CORE)
+
+
+def b7_equity(start, opens, closes, rates):
+    """B7 (bot 2 round 2): B5's equal mix of version 2, trend-timed S&P 500 and
+    sector momentum at 1.7x, with exposure cut in a straight line from a 15% to
+    a 30% drawdown. $100,000 at `start`, through the last close in `closes`."""
+    import bot2_backtest as b2
+    from backtest import first_day_of_month, first_day_of_week, simulate
+    from bot2_round2 import floor_half_cap
+    weekly, monthly = first_day_of_week(closes.index), first_day_of_month(closes.index)
+    used = b2.b5_used([(s.target_weights_v2(closes[s.TICKERS], rates), weekly),
+                       (b2.b2_targets(closes)[0], weekly),
+                       (b2.b3_targets(closes, rates)[0], monthly)], closes.index)
+    cols = list(used.columns)
+    daily, _, _ = simulate(b2.as_close_rows(used), None, opens[cols].bfill(), closes[cols].bfill(),
+                           rates, weekly, start)
+    rows = b2.base_rows(daily, rates, used)
+    R, _ = b2.overlay([rows[c].values for c in ("excess", "invested", "rf", "spread")],
+                      B7_LEVERAGE, floor=floor_half_cap)
+    return round(b2.bt.START_VALUE * float(np.prod(1 + R)), 2)
+
+
+def shadow_equity(since, today, tbill, bars_fn=yahoo_bars, b7_bars_fn=yahoo_b7_bars):
     """Simulated equity of each shadow version, $100,000 on the go-live date,
     run with the backtest's own simulator through the last finished close.
-    Returns ({version: equity}, date of that close)."""
+    Returns ({version: equity}, date of that close). B7 is None when its data
+    or rules fail, so a problem there never blanks the other shadows."""
     from backtest import START_VALUE, first_day_of_week, simulate
     start = pd.Timestamp(since)
     opens, closes = bars_fn((start - pd.DateOffset(years=3)).date(), today)
     keep = closes.index.date < today
     opens, closes = opens[keep], closes[keep]
     if closes.empty or closes.index[-1] < start:
-        return {k: START_VALUE for k in SHADOWS}, None
+        return {**{k: START_VALUE for k in SHADOWS}, "b7": START_VALUE}, None
     rates = tbill.reindex(closes.index.union(tbill.index)).ffill().reindex(closes.index).bfill()
     weekly = first_day_of_week(closes.index)
     scores = s.trend_scores(closes, rates)
@@ -128,6 +156,16 @@ def shadow_equity(since, today, tbill, bars_fn=yahoo_bars):
     for name, fn in SHADOWS.items():
         daily, _, _ = simulate(getattr(s, fn)(closes, rates), scores, opens, closes, rates, weekly, start)
         out[name] = round(float(daily["equity"].iloc[-1]), 2)
+    try:
+        o7, c7 = b7_bars_fn((start - pd.DateOffset(years=3)).date(), today)
+        keep7 = c7.index <= closes.index[-1]
+        o7, c7 = o7[keep7], c7[keep7]
+        if c7.index[-1] != closes.index[-1]:
+            raise ValueError("B7 prices end on a different day")
+        r7 = tbill.reindex(c7.index.union(tbill.index)).ffill().reindex(c7.index).bfill()
+        out["b7"] = b7_equity(start, o7, c7, r7)
+    except Exception:  # noqa: BLE001
+        out["b7"] = None
     return out, closes.index[-1].date()
 
 
@@ -535,6 +573,9 @@ def run(broker, trading_enabled, log_dir="log", now=None, data=None, dividend_fn
             row["shadow_close"] = str(shadow_close) if shadow_close else ""
             for name, value in shadows.items():
                 row[f"shadow_{name}"] = value
+            missing = [name for name, value in shadows.items() if value is None]
+            if missing:
+                flags.append(f"shadow {', '.join(missing)} not updated (data or rule error)")
         except Exception as e:  # noqa: BLE001
             flags.append(f"shadow versions not updated ({str(e)[:80]})")
 
