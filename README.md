@@ -70,6 +70,8 @@ The full rules are in [SPEC.md](SPEC.md).
 | `results/` | Summary, daily equity, every trade, every position from entry to exit, and the chart |
 | `tests/` | Fail if any rule uses future prices, if the portfolio shorts or borrows, if the backtest's dollars don't reconcile, if version 3 holds an ETF before it has a year of prices, or if the live bot ever borrows, trades twice in a week, or trades on stale data |
 | `tools/as_live_backtest.py` | Backtests version 2 through the live bot's own order code, adding the cheaper funds, BOXX, the cash buffer and the price limits one at a time; writes `results/v2_live/` |
+| `tools/v2_diagnostics.py` | Describes where version 2's return, limits and trading came from (writes `results/v2_diagnostics.md`); changes no rule |
+| `tools/v8_evidence.py` | Describes bot 2's mix with no leverage against version 2 (correlations, sub-periods, deflated Sharpe, holdings) for the improvement sweep (writes `results/v8_evidence.md`); not a trial |
 | `tools/two_x_costs.py` | Measures what each 2x fund costs per year beyond twice its 1x ETF (used by version 4) |
 | `trials.csv` | One row per backtest run, used for the deflated Sharpe ratio |
 
